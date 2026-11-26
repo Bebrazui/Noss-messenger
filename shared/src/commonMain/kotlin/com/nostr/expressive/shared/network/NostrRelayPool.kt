@@ -30,8 +30,10 @@ import kotlinx.serialization.json.jsonPrimitive
 class NostrRelayPool(
     private val relayUrls: List<String> = listOf(
         "wss://nos.lol",
+        "wss://relay.damus.io",
         "wss://relay.primal.net",
-        "wss://relay.damus.io"
+        "wss://search.nos.today",
+        "wss://relay.snort.social"
     )
 ) {
     private val client = HttpClient {

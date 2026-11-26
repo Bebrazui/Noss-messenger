@@ -99,6 +99,7 @@ import com.nostr.expressive.ui.components.ExpressiveFloatingToolbar
 import com.nostr.expressive.ui.components.ExpressiveMessageBubble
 import com.nostr.expressive.ui.components.ExpressiveSplitButton
 import com.nostr.expressive.ui.components.NostrLogo
+import com.nostr.expressive.ui.components.NossAvatar
 import com.nostr.expressive.ui.components.PlusIcon
 import com.nostr.expressive.ui.components.SearchIcon
 import com.nostr.expressive.ui.navigation.PlatformBackHandler
@@ -604,10 +605,13 @@ fun MainAppContent(
                 Screen.CHAT_DETAIL -> {
                     activeChatId?.let { chatId ->
                         val messages = allMessages[chatId] ?: emptyList()
+                        val currentChat = chats.find { it.chatId == chatId || it.peerPubkey.equals(activeChatPubkey, ignoreCase = true) }
+                        val displayTitle = currentChat?.peerDisplayName?.ifBlank { null } ?: activeChatTitle
                         ChatDetailScreen(
-                            title = activeChatTitle,
+                            title = displayTitle,
                             peerPubkey = activeChatPubkey,
                             messages = messages,
+                            avatarUrl = currentChat?.peerAvatarUrl,
                             onBack = { currentScreen = Screen.CHATS },
                             onSendMessage = { text ->
                                 repository.sendMessage(chatId, activeChatPubkey, text)
@@ -1047,6 +1051,13 @@ fun ChatListScreen(
     onChannelClick: (PublicChannel) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    val communityUsers by repository.communityUsers.collectAsState()
+
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.isNotBlank()) {
+            repository.searchNossUsers(searchQuery)
+        }
+    }
 
     val filteredChats = remember(chats, searchQuery) {
         if (searchQuery.isBlank()) chats
@@ -1055,9 +1066,17 @@ fun ChatListScreen(
         }
     }
 
-    val foundUsers = remember(searchQuery) {
-        if (searchQuery.isBlank()) emptyList()
-        else repository.searchNossUsers(searchQuery)
+    val foundUsers = remember(searchQuery, communityUsers) {
+        val clean = searchQuery.trim().removePrefix("@").lowercase()
+        if (clean.isBlank()) emptyList()
+        else {
+            communityUsers.filter { user ->
+                user.name.lowercase().contains(clean) ||
+                user.displayName.lowercase().contains(clean) ||
+                user.npub.lowercase().contains(clean) ||
+                user.pubkeyHex.lowercase().contains(clean)
+            }
+        }
     }
 
     val filteredChannels = remember(channels, searchQuery) {
@@ -1297,20 +1316,11 @@ fun NossUserListItem(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = (user.displayName.ifBlank { user.name }).take(2).uppercase(),
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            NossAvatar(
+                avatarUrl = user.picture,
+                displayName = user.displayName.ifBlank { user.name },
+                size = 44.dp
+            )
 
             Spacer(modifier = Modifier.width(14.dp))
 
@@ -1361,19 +1371,11 @@ fun ChatListItem(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = chat.peerDisplayName.take(2).uppercase(),
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
+            NossAvatar(
+                avatarUrl = chat.peerAvatarUrl,
+                displayName = chat.peerDisplayName,
+                size = 44.dp
+            )
 
             Spacer(modifier = Modifier.width(12.dp))
 
@@ -1423,7 +1425,8 @@ fun ChatDetailScreen(
     messages: List<ChatMessage>,
     onBack: () -> Unit,
     onSendMessage: (String) -> Unit,
-    onSendMedia: () -> Unit
+    onSendMedia: () -> Unit,
+    avatarUrl: String? = null
 ) {
     var inputText by remember { mutableStateOf("") }
 
@@ -1431,13 +1434,21 @@ fun ChatDetailScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(title, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            text = "В сети",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        NossAvatar(
+                            avatarUrl = avatarUrl,
+                            displayName = title,
+                            size = 36.dp
                         )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(title, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                text = "Nostr • Защищено",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 },
                 navigationIcon = {

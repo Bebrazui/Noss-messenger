@@ -131,19 +131,21 @@ class MessengerRepository(
             } else clean
 
             fetchUserProfile(pubkeyHex)
-            val existing = _communityUsers.value.find { it.pubkeyHex == pubkeyHex }
+            val existing = _communityUsers.value.find { it.pubkeyHex.equals(pubkeyHex, ignoreCase = true) }
             if (existing != null) return listOf(existing)
 
             val npub = try { Nip19.toNpub(pubkeyHex) } catch (_: Exception) { pubkeyHex }
-            return listOf(
-                NossUser(
-                    pubkeyHex = pubkeyHex,
-                    npub = npub,
-                    name = "user_${pubkeyHex.take(6)}",
-                    displayName = "User ${pubkeyHex.take(6)}",
-                    about = "Nostr User"
-                )
+            val placeholder = NossUser(
+                pubkeyHex = pubkeyHex,
+                npub = npub,
+                name = "user_${pubkeyHex.take(6)}",
+                displayName = "User ${pubkeyHex.take(6)}",
+                about = "Nostr User"
             )
+            if (_communityUsers.value.none { it.pubkeyHex.equals(pubkeyHex, ignoreCase = true) }) {
+                _communityUsers.value = _communityUsers.value + placeholder
+            }
+            return listOf(placeholder)
         }
 
         // Trigger NIP-50 search on relays
@@ -153,7 +155,8 @@ class MessengerRepository(
         return _communityUsers.value.filter { user ->
             user.name.lowercase().contains(clean) ||
             user.displayName.lowercase().contains(clean) ||
-            user.npub.lowercase().contains(clean)
+            user.npub.lowercase().contains(clean) ||
+            user.pubkeyHex.lowercase().contains(clean)
         }
     }
 
