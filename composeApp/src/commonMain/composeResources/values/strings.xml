@@ -1,0 +1,91 @@
+<resources>
+    <string name="app_name">Noss</string>
+
+    <!-- Navigation -->
+    <string name="nav_chats">Чаты</string>
+    <string name="nav_profile">Профиль</string>
+    <string name="nav_new_action">Новое действие</string>
+
+    <!-- Chats Screen -->
+    <string name="chats_title">Чаты</string>
+    <string name="search_hint">Поиск</string>
+    <string name="search_users_section">Пользователи Noss</string>
+    <string name="search_no_results">Ничего не найдено</string>
+    <string name="empty_chats_title">Нет активных чатов</string>
+    <string name="empty_chats_subtitle">Нажмите +, чтобы начать диалог</string>
+    <string name="channels_section">Публичные каналы</string>
+
+    <!-- Action Sheet -->
+    <string name="action_sheet_title">Новое действие</string>
+    <string name="action_new_chat">Новый диалог</string>
+    <string name="action_new_chat_desc">Личная переписка с двойным шифрованием</string>
+    <string name="action_new_channel">Новый канал</string>
+    <string name="action_new_channel_desc">Публичный канал в децентрализованной сети</string>
+
+    <!-- New Chat Sheet -->
+    <string name="new_chat_title">Новый диалог</string>
+    <string name="new_chat_npub_hint">npub1... или hex публичный ключ</string>
+    <string name="new_chat_name_hint">Имя контакта (необязательно)</string>
+    <string name="btn_cancel">Отмена</string>
+    <string name="btn_start">Начать</string>
+
+    <!-- New Channel Sheet -->
+    <string name="new_channel_title">Создать публичный канал</string>
+    <string name="new_channel_name_hint">Название канала (#tag)</string>
+    <string name="new_channel_about_hint">Описание канала и тематика</string>
+    <string name="btn_create">Создать</string>
+
+    <!-- Profile Screen -->
+    <string name="profile_title">Профиль</string>
+    <string name="profile_default_name">Анонимный Nostr</string>
+    <string name="profile_default_handle">handle</string>
+    <string name="profile_edit_btn">Редактировать профиль</string>
+    <string name="profile_public_key">Публичный ключ</string>
+    <string name="profile_secret_key">Секретный ключ</string>
+    <string name="profile_secret_key_warning">Никому не показывайте этот ключ</string>
+    <string name="profile_show_key">Показать</string>
+    <string name="profile_hide_key">Скрыть</string>
+    <string name="profile_bio">Bio</string>
+    <string name="profile_copied">Скопировано</string>
+    <string name="profile_logout_link">Выйти</string>
+
+    <!-- Logout Safety Sheet -->
+    <string name="logout_dialog_title">Выход</string>
+    <string name="logout_dialog_warning">Сохраните секретный ключ перед выходом. В Noss нет серверов: без ключа восстановить доступ невозможно.</string>
+    <string name="logout_dialog_copy_nsec">Скопировать ключ</string>
+    <string name="logout_dialog_confirm">Выйти</string>
+
+    <!-- Key Backup Screen upon Registration -->
+    <string name="backup_title">Ваш секретный ключ</string>
+    <string name="backup_subtitle">Сохраните его сейчас. В Noss нет серверов, поэтому восстановить аккаунт без этого ключа невозможно.</string>
+    <string name="backup_copy_btn">Скопировать секретный ключ</string>
+    <string name="backup_continue_btn">Я сохранил ключ</string>
+
+    <!-- Profile Setup Screen -->
+    <string name="setup_screen_title">Как вас называть?</string>
+    <string name="setup_name_label">Имя</string>
+    <string name="setup_name_hint">Например: Satoshi</string>
+    <string name="setup_handle_label">Юзернейм</string>
+    <string name="setup_handle_hint">username</string>
+    <string name="setup_bio_label">О себе</string>
+    <string name="setup_bio_hint">Краткая биография (необязательно)</string>
+    <string name="setup_save_btn">Готово</string>
+    <string name="setup_skip_btn">Пропустить</string>
+
+    <!-- Chat / Channel Detail -->
+    <string name="chat_message_hint">Зашифрованное сообщение...</string>
+    <string name="channel_message_hint">Сообщение в канал...</string>
+    <string name="empty_dialog">Диалог пуст. Отправьте первое сообщение.</string>
+    <string name="btn_send">Отправить</string>
+    <string name="channel_public_badge">Публичный канал Nostr (NIP-28)</string>
+
+    <!-- Onboarding / Welcome Screen -->
+    <string name="welcome_title">Привет, это Noss</string>
+    <string name="welcome_subtitle">Децентрализованный приватный мессенджер без серверов</string>
+    <string name="welcome_start_btn">Приступить</string>
+    <string name="welcome_have_key_btn">У меня уже есть ключ (nsec)</string>
+    <string name="welcome_import_title">Вход по ключу</string>
+    <string name="welcome_nsec_hint">nsec1... или hex приватный ключ</string>
+    <string name="welcome_import_btn">Войти по ключу</string>
+    <string name="welcome_back_btn">Назад</string>
+</resources>
