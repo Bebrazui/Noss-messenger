@@ -2,7 +2,10 @@ import asyncio
 import json
 import hashlib
 import sys
-import websockets
+import os
+import random
+import time
+
 sys.path.append('C:/Users/ttt79/.gemini/antigravity/scratch/nostr-expressive-messenger')
 import bip340_ref as bip
 
@@ -17,7 +20,6 @@ def derive_conversation_key(pk_a: str, pk_b: str) -> bytes:
 def decrypt_inner(ciphertext_hex: str, key: bytes, iv_hex: str) -> str:
     ciphertext = bytes.fromhex(ciphertext_hex)
     iv = bytes.fromhex(iv_hex)
-    # Stream cipher match from PlatformCrypto
     output = bytearray(len(ciphertext))
     counter = 0
     keystream_index = 0
@@ -32,7 +34,6 @@ def decrypt_inner(ciphertext_hex: str, key: bytes, iv_hex: str) -> str:
     return output.decode('utf-8', errors='replace')
 
 def encrypt_inner(text: str, key: bytes, sender_pk: str) -> str:
-    import os
     iv = os.urandom(12)
     plaintext = text.encode()
     ciphertext = bytearray(len(plaintext))
@@ -56,10 +57,9 @@ def encrypt_inner(text: str, key: bytes, sender_pk: str) -> str:
     return json.dumps(env)
 
 def create_gift_wrap(inner_json: str, recipient_pk: str) -> dict:
-    import os, time, random
     sk_ephem = os.urandom(32)
     pk_ephem = bip.pubkey_gen(sk_ephem).hex()
-    created_at = int(time.time()) + random.randint(-1000, 1000)
+    created_at = int(time.time()) - random.randint(1, 30)
     kind = 1059
     tags = [['p', recipient_pk.lower()]]
     serialized = json.dumps([0, pk_ephem, created_at, kind, tags, inner_json], separators=(',', ':'), ensure_ascii=False)
@@ -76,46 +76,55 @@ def create_gift_wrap(inner_json: str, recipient_pk: str) -> dict:
     }
 
 async def run_bob():
-    print(f"Bob listening on wss://nos.lol for pubkey {BOB_PK}...")
-    async with websockets.connect('wss://nos.lol') as ws:
-        req = ['REQ', 'sub_bob_inbox', {'kinds': [1059], '#p': [BOB_PK]}]
-        await ws.send(json.dumps(req))
-        print("Subscription sent. Waiting for message from Alice...")
+    import websockets
+    while True:
+        try:
+            print(f"[BOB] Connecting to wss://nos.lol for pubkey {BOB_PK}...")
+            async with websockets.connect('wss://nos.lol', ping_interval=20, ping_timeout=20) as ws:
+                req = ['REQ', f'sub_bob_{int(time.time())}', {'kinds': [1059], '#p': [BOB_PK]}]
+                await ws.send(json.dumps(req))
+                print(f"[BOB] Subscribed to wss://nos.lol. Waiting for messages...")
 
-        while True:
-            msg = await ws.recv()
-            data = json.loads(msg)
-            if data[0] == 'EVENT':
-                event = data[2]
-                print(f"[BOB] Received Kind 1059 Event: {event['id']}")
-                try:
-                    envelope = json.loads(event['content'])
-                    if not isinstance(envelope, dict) or 'sender_pubkey' not in envelope:
-                        continue
-                    alice_pk = envelope['sender_pubkey']
-                    chat_key = derive_conversation_key(alice_pk, BOB_PK)
-                    decrypted_text = decrypt_inner(envelope['ciphertext'], chat_key, envelope['iv'])
-                    print(f"==================================================")
-                    print(f"[BOB SUCCESS] Received message from Alice ({alice_pk}):")
-                    print(f"Text: '{decrypted_text}'")
-                    print(f"==================================================")
+                while True:
+                    msg = await ws.recv()
+                    data = json.loads(msg)
+                    if data[0] == 'EVENT':
+                        event = data[2]
+                        content = event.get('content', '')
+                        try:
+                            envelope = json.loads(content)
+                        except Exception:
+                            continue
+                        if not isinstance(envelope, dict) or 'ciphertext' not in envelope or 'sender_pubkey' not in envelope:
+                            continue
 
-                    with open('C:/Users/ttt79/.gemini/antigravity/scratch/nostr-expressive-messenger/bob_received.json', 'w', encoding='utf-8') as f:
-                        json.dump({
-                            'event_id': event['id'],
-                            'sender': alice_pk,
-                            'recipient': BOB_PK,
-                            'text': decrypted_text
-                        }, f, ensure_ascii=False, indent=2)
+                        alice_pk = envelope['sender_pubkey']
+                        chat_key = derive_conversation_key(alice_pk, BOB_PK)
+                        decrypted_text = decrypt_inner(envelope['ciphertext'], chat_key, envelope['iv'])
+                        
+                        print(f"==================================================")
+                        print(f"[BOB SUCCESS] Received message from Alice ({alice_pk}):")
+                        print(f"Text: '{decrypted_text}'")
+                        print(f"==================================================")
 
-                    reply_text = f"Привет, Алиса! Я получил твое сообщение: '{decrypted_text}'. Доставка через nos.lol подтверждена!"
-                    reply_inner = encrypt_inner(reply_text, chat_key, BOB_PK)
-                    reply_wrap = create_gift_wrap(reply_inner, alice_pk)
-                    await ws.send(json.dumps(['EVENT', reply_wrap]))
-                    print(f"[BOB] Sent reply to Alice ({reply_wrap['id']})!")
-                    return
-                except Exception as e:
-                    print(f"[BOB] Skipped event or error: {e}")
+                        out_path = 'C:/Users/ttt79/.gemini/antigravity/scratch/nostr-expressive-messenger/bob_received.json'
+                        with open(out_path, 'w', encoding='utf-8') as f:
+                            json.dump({
+                                'event_id': event['id'],
+                                'sender': alice_pk,
+                                'recipient': BOB_PK,
+                                'text': decrypted_text
+                            }, f, ensure_ascii=False, indent=2)
+
+                        # Auto-reply
+                        reply_text = f"Привет! Сообщение '{decrypted_text}' доставлено и расшифровано через nos.lol!"
+                        reply_inner = encrypt_inner(reply_text, chat_key, BOB_PK)
+                        reply_wrap = create_gift_wrap(reply_inner, alice_pk)
+                        await ws.send(json.dumps(['EVENT', reply_wrap]))
+                        print(f"[BOB] Sent auto-reply to Alice ({reply_wrap['id']})!")
+        except Exception as e:
+            print(f"[BOB RECONNECT] Connection error: {e}. Reconnecting in 3s...")
+            await asyncio.sleep(3)
 
 if __name__ == '__main__':
     asyncio.run(run_bob())

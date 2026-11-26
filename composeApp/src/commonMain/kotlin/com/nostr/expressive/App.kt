@@ -147,6 +147,7 @@ fun App() {
                 val dbKey = PlatformCrypto.sha256((identity.privkeyHex + "_DATABASE_ENC_KEY_V1").encodeToByteArray())
                 MessengerRepository(
                     myPubkey = identity.pubkeyHex,
+                    myPrivkeyHex = identity.privkeyHex,
                     sessionKey = sessionKey,
                     dbKey = dbKey
                 )

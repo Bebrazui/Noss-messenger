@@ -25,22 +25,31 @@ object Nip01Profile {
     /**
      * NIP-01 Kind 0: Replaceable user metadata
      */
-    fun buildProfileEvent(metadata: ProfileMetadata, myPubkey: String): NostrEvent {
+    fun buildProfileEvent(metadata: ProfileMetadata, myPubkey: String, privkeyHex: String = ""): NostrEvent {
         val content = json.encodeToString(metadata)
         val now = PlatformCrypto.currentTimeSeconds()
 
-        val eventWithoutId = NostrEvent(
-            pubkey = myPubkey,
-            created_at = now,
-            kind = NostrKinds.METADATA,
-            tags = emptyList(),
-            content = content,
-            sig = "sig_nip01_placeholder"
-        )
-
-        val serialized = "${eventWithoutId.pubkey}:${eventWithoutId.created_at}:${eventWithoutId.kind}:${eventWithoutId.content}"
-        val id = PlatformCrypto.sha256(serialized.encodeToByteArray()).toHex()
-        return eventWithoutId.copy(id = id)
+        return if (privkeyHex.isNotBlank()) {
+            NostrEvent.createAndSign(
+                privkeyHex = privkeyHex,
+                kind = NostrKinds.METADATA,
+                content = content,
+                tags = emptyList(),
+                createdAt = now
+            )
+        } else {
+            val eventWithoutId = NostrEvent(
+                pubkey = myPubkey,
+                created_at = now,
+                kind = NostrKinds.METADATA,
+                tags = emptyList(),
+                content = content,
+                sig = ""
+            )
+            val serialized = "${eventWithoutId.pubkey}:${eventWithoutId.created_at}:${eventWithoutId.kind}:${eventWithoutId.content}"
+            val id = PlatformCrypto.sha256(serialized.encodeToByteArray()).toHex()
+            eventWithoutId.copy(id = id)
+        }
     }
 
     /**

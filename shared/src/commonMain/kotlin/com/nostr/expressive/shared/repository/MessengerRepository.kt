@@ -78,7 +78,8 @@ data class NossUser(
     val npub: String,
     val name: String,
     val displayName: String,
-    val about: String = ""
+    val about: String = "",
+    val picture: String? = null
 )
 
 sealed class UsernameCheckResult {
@@ -91,6 +92,7 @@ sealed class UsernameCheckResult {
 
 class MessengerRepository(
     val myPubkey: String,
+    val myPrivkeyHex: String = "",
     private val sessionKey: ByteArray,
     dbKey: ByteArray,
     private val relayPool: NostrRelayPool = NostrRelayPool()
@@ -115,50 +117,39 @@ class MessengerRepository(
 
     private val knownUsernames = mutableMapOf<String, String>() // lowercase name -> pubkeyHex
 
-    private val _communityUsers = MutableStateFlow<List<NossUser>>(
-        listOf(
-            NossUser(
-                pubkeyHex = "eab0e756d018d6976d34e9d1dd033506667b09738587ba0a08ac30130b1b7066",
-                npub = com.nostr.expressive.shared.crypto.Nip19.toNpub("eab0e756d018d6976d34e9d1dd033506667b09738587ba0a08ac30130b1b7066"),
-                name = "satoshi",
-                displayName = "Satoshi Nakamoto",
-                about = "Creator of Bitcoin & decentralized peer-to-peer cash."
-            ),
-            NossUser(
-                pubkeyHex = "82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2",
-                npub = com.nostr.expressive.shared.crypto.Nip19.toNpub("82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2"),
-                name = "jack",
-                displayName = "Jack",
-                about = "Open protocols and decentralization."
-            ),
-            NossUser(
-                pubkeyHex = "3bf0c63fcb93463407af97b5e0918838e6fb709629938366ddfad6a576acaca0",
-                npub = com.nostr.expressive.shared.crypto.Nip19.toNpub("3bf0c63fcb93463407af97b5e0918838e6fb709629938366ddfad6a576acaca0"),
-                name = "fiatjaf",
-                displayName = "fiatjaf",
-                about = "Nostr protocol author."
-            ),
-            NossUser(
-                pubkeyHex = "32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245",
-                npub = com.nostr.expressive.shared.crypto.Nip19.toNpub("32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245"),
-                name = "jb55",
-                displayName = "William Casarin",
-                about = "Damus creator and Nostr contributor."
-            ),
-            NossUser(
-                pubkeyHex = "460c25e682fda7832b52d6910ede822b3ee1f778144d4b2932945b9592d13b50",
-                npub = com.nostr.expressive.shared.crypto.Nip19.toNpub("460c25e682fda7832b52d6910ede822b3ee1f778144d4b2932945b9592d13b50"),
-                name = "alex",
-                displayName = "Alex",
-                about = "Noss core dev."
-            )
-        )
-    )
+    private val _communityUsers = MutableStateFlow<List<NossUser>>(emptyList())
     val communityUsers: StateFlow<List<NossUser>> = _communityUsers.asStateFlow()
 
     fun searchNossUsers(query: String): List<NossUser> {
         val clean = query.trim().removePrefix("@").lowercase()
         if (clean.isBlank()) return emptyList()
+
+        // If query is an npub1... or 64-char hex pubkey, resolve and fetch immediately
+        if (clean.startsWith("npub1") || (clean.length == 64 && clean.all { it in "0123456789abcdef" })) {
+            val pubkeyHex = if (clean.startsWith("npub1")) {
+                try { Nip19.parseNpub(clean).lowercase() } catch (_: Exception) { clean }
+            } else clean
+
+            fetchUserProfile(pubkeyHex)
+            val existing = _communityUsers.value.find { it.pubkeyHex == pubkeyHex }
+            if (existing != null) return listOf(existing)
+
+            val npub = try { Nip19.toNpub(pubkeyHex) } catch (_: Exception) { pubkeyHex }
+            return listOf(
+                NossUser(
+                    pubkeyHex = pubkeyHex,
+                    npub = npub,
+                    name = "user_${pubkeyHex.take(6)}",
+                    displayName = "User ${pubkeyHex.take(6)}",
+                    about = "Nostr User"
+                )
+            )
+        }
+
+        // Trigger NIP-50 search on relays
+        val searchSubId = "search_${clean.take(8)}"
+        relayPool.subscribe(searchSubId, listOf(NostrKinds.METADATA), search = clean, limit = 20)
+
         return _communityUsers.value.filter { user ->
             user.name.lowercase().contains(clean) ||
             user.displayName.lowercase().contains(clean) ||
@@ -230,13 +221,29 @@ class MessengerRepository(
         relayPool.start()
         relayPool.subscribe("sub_inbox", listOf(NostrKinds.GIFT_WRAP), pTags = listOf(myPubkey))
         relayPool.subscribe("sub_public_channels", listOf(NostrKinds.CHANNEL_CREATE))
-        relayPool.subscribe("sub_metadata", listOf(NostrKinds.METADATA))
+        relayPool.subscribe("sub_metadata", listOf(NostrKinds.METADATA), limit = 50)
+
+        // Request live profile metadata for all existing chats from relays
+        savedChats.forEach { chat ->
+            fetchUserProfile(chat.peerPubkey)
+        }
 
         scope.launch {
             relayPool.eventsFlow.collect { event ->
                 handleIncomingEvent(event)
             }
         }
+    }
+
+    fun fetchUserProfile(pubkeyHex: String) {
+        val clean = pubkeyHex.trim().lowercase()
+        if (clean.isBlank()) return
+        relayPool.subscribe(
+            subId = "sub_user_${clean.take(12)}",
+            kinds = listOf(NostrKinds.METADATA),
+            authors = listOf(clean),
+            limit = 1
+        )
     }
 
     fun updateAndPublishProfile(
@@ -257,7 +264,7 @@ class MessengerRepository(
             nip05 = nip05,
             lud16 = lud16
         )
-        val event = Nip01Profile.buildProfileEvent(meta, myPubkey)
+        val event = Nip01Profile.buildProfileEvent(meta, myPubkey, myPrivkeyHex)
         
         val updated = UserProfile(
             pubkey = myPubkey,
@@ -276,7 +283,7 @@ class MessengerRepository(
         _isProfileConfigured.value = true
         knownUsernames[name.trim().lowercase()] = myPubkey
 
-        // Broadcast Kind 0 to all relays
+        // Broadcast Kind 0 with real Schnorr signature to all relays
         relayPool.broadcastEvent(event)
     }
 
@@ -300,13 +307,18 @@ class MessengerRepository(
 
         // Check local cache
         val cachedOwner = knownUsernames[clean]
-        if (cachedOwner != null && cachedOwner != myPubkey) {
+        if (cachedOwner != null && !cachedOwner.equals(myPubkey, ignoreCase = true)) {
             return UsernameCheckResult.Taken(clean, cachedOwner)
         }
 
-        // Probe relays for Kind 0 events
+        // Probe relays with search filter for this username
         val probeSubId = "probe_user_${PlatformCrypto.randomBytes(4).toHex()}"
-        relayPool.subscribe(probeSubId, listOf(NostrKinds.METADATA))
+        relayPool.subscribe(
+            subId = probeSubId,
+            kinds = listOf(NostrKinds.METADATA),
+            search = clean,
+            limit = 20
+        )
 
         var takenBy: String? = null
         val probeJob = scope.launch {
@@ -317,7 +329,7 @@ class MessengerRepository(
                         val candidateName = meta.name?.trim()?.lowercase()
                         if (candidateName != null) {
                             knownUsernames[candidateName] = event.pubkey
-                            if (candidateName == clean && event.pubkey != myPubkey) {
+                            if (candidateName == clean && !event.pubkey.equals(myPubkey, ignoreCase = true)) {
                                 takenBy = event.pubkey
                             }
                         }
@@ -327,12 +339,12 @@ class MessengerRepository(
         }
 
         // Wait briefly for network probe responses
-        delay(900L)
+        delay(1200L)
         probeJob.cancel()
         relayPool.unsubscribe(probeSubId)
 
         val finalCheck = takenBy ?: knownUsernames[clean]
-        return if (finalCheck != null && finalCheck != myPubkey) {
+        return if (finalCheck != null && !finalCheck.equals(myPubkey, ignoreCase = true)) {
             UsernameCheckResult.Taken(clean, finalCheck)
         } else {
             UsernameCheckResult.Available(clean)
@@ -424,17 +436,28 @@ class MessengerRepository(
             cleanInput.lowercase()
         }
 
+        // Trigger live profile fetch from Nostr relays immediately
+        fetchUserProfile(pubkeyHex)
+
         val chatId = "chat_${pubkeyHex.take(12)}"
-        val existing = _chats.value.find { it.chatId == chatId }
+        val existing = _chats.value.find { it.chatId == chatId || it.peerPubkey.equals(pubkeyHex, ignoreCase = true) }
         if (existing != null) {
             return existing
         }
 
+        val cachedUser = _communityUsers.value.find { it.pubkeyHex.equals(pubkeyHex, ignoreCase = true) }
+        val finalName = peerDisplayName.ifBlank {
+            cachedUser?.displayName?.ifBlank { null }
+                ?: cachedUser?.name?.ifBlank { null }
+                ?: "User ${pubkeyHex.take(6)}"
+        }
+        val finalAvatar = cachedUser?.picture
+
         val newChat = ChatSummary(
             chatId = chatId,
             peerPubkey = pubkeyHex,
-            peerDisplayName = peerDisplayName.ifBlank { "User ${pubkeyHex.take(6)}" },
-            peerAvatarUrl = null,
+            peerDisplayName = finalName,
+            peerAvatarUrl = finalAvatar,
             lastMessage = "Chat started",
             lastTimestamp = PlatformCrypto.currentTimeSeconds(),
             unreadCount = 0
@@ -521,25 +544,31 @@ class MessengerRepository(
                 // Incoming peer profile metadata
                 try {
                     val meta = Nip01Profile.parseMetadata(event.content)
-                    meta.name?.trim()?.lowercase()?.let { knownUsernames[it] = event.pubkey }
-                    val senderHex = event.pubkey
+                    val senderHex = event.pubkey.lowercase()
+                    meta.name?.trim()?.lowercase()?.let { knownUsernames[it] = senderHex }
+                    val newDisplayName = meta.display_name?.ifBlank { null }
+                        ?: meta.name?.ifBlank { null }
+                        ?: "User ${senderHex.take(6)}"
+                    val newAvatar = meta.picture?.ifBlank { null }
+
                     val nossUser = NossUser(
                         pubkeyHex = senderHex,
                         npub = com.nostr.expressive.shared.crypto.Nip19.toNpub(senderHex),
                         name = meta.name ?: "user",
-                        displayName = meta.display_name ?: meta.name ?: "User",
-                        about = meta.about ?: ""
+                        displayName = newDisplayName,
+                        about = meta.about ?: "",
+                        picture = newAvatar
                     )
-                    _communityUsers.value = (_communityUsers.value.filter { it.pubkeyHex != senderHex } + nossUser)
+                    _communityUsers.value = (_communityUsers.value.filter { !it.pubkeyHex.equals(senderHex, ignoreCase = true) } + nossUser)
                     val chatId = "chat_${senderHex.take(12)}"
-                    val existingChat = _chats.value.find { it.chatId == chatId }
+                    val existingChat = _chats.value.find { it.chatId == chatId || it.peerPubkey.equals(senderHex, ignoreCase = true) }
                     if (existingChat != null) {
                         val updated = existingChat.copy(
-                            peerDisplayName = meta.display_name ?: meta.name ?: existingChat.peerDisplayName,
-                            peerAvatarUrl = meta.picture ?: existingChat.peerAvatarUrl
+                            peerDisplayName = newDisplayName,
+                            peerAvatarUrl = newAvatar ?: existingChat.peerAvatarUrl
                         )
                         localDb.saveChat(updated)
-                        _chats.value = _chats.value.map { if (it.chatId == chatId) updated else it }
+                        _chats.value = _chats.value.map { if (it.chatId == existingChat.chatId) updated else it }
                     }
                 } catch (_: Exception) {}
             }

@@ -152,17 +152,29 @@ class NostrRelayPool(
         subId: String,
         kinds: List<Int>,
         pTags: List<String> = emptyList(),
-        eTags: List<String> = emptyList()
+        eTags: List<String> = emptyList(),
+        authors: List<String> = emptyList(),
+        search: String? = null,
+        limit: Int? = null
     ) {
         scope.launch {
             val filterMap = mutableMapOf<String, kotlinx.serialization.json.JsonElement>()
             filterMap["kinds"] = JsonArray(kinds.map { JsonPrimitive(it) })
 
+            if (authors.isNotEmpty()) {
+                filterMap["authors"] = JsonArray(authors.map { JsonPrimitive(it.lowercase()) })
+            }
             if (pTags.isNotEmpty()) {
-                filterMap["#p"] = JsonArray(pTags.map { JsonPrimitive(it) })
+                filterMap["#p"] = JsonArray(pTags.map { JsonPrimitive(it.lowercase()) })
             }
             if (eTags.isNotEmpty()) {
-                filterMap["#e"] = JsonArray(eTags.map { JsonPrimitive(it) })
+                filterMap["#e"] = JsonArray(eTags.map { JsonPrimitive(it.lowercase()) })
+            }
+            if (!search.isNullOrBlank()) {
+                filterMap["search"] = JsonPrimitive(search)
+            }
+            if (limit != null && limit > 0) {
+                filterMap["limit"] = JsonPrimitive(limit)
             }
 
             val rawFilter = json.encodeToString(listOf(
