@@ -91,6 +91,11 @@ class NostrRelayPool(
                     }
                 }
             } catch (e: Exception) {
+                val errMsg = e.message ?: e.toString()
+                if (errMsg.contains("SecurityError", ignoreCase = true) || errMsg.contains("insecure", ignoreCase = true)) {
+                    println("[NostrRelayPool] Skipping insecure relay $url on secure HTTPS origin.")
+                    return
+                }
                 println("[NostrRelayPool] Error on $url: ${e.message}. Retrying in ${backoffMs / 1000}s...")
                 delay(backoffMs)
                 backoffMs = (backoffMs * 2).coerceAtMost(30_000L)

@@ -279,16 +279,38 @@ private fun StatusIndicator(status: MessageDeliveryStatus) {
             )
         }
         MessageDeliveryStatus.SENT -> {
-            Text(text = "✓", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f))
+            CanvasCheckmark(double = false, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f))
         }
         MessageDeliveryStatus.DELIVERED -> {
-            Text(text = "✓✓", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+            CanvasCheckmark(double = true, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
         }
         MessageDeliveryStatus.READ -> {
-            Text(text = "✓✓", fontSize = 11.sp, color = MaterialTheme.colorScheme.tertiary)
+            CanvasCheckmark(double = true, color = MaterialTheme.colorScheme.tertiary)
         }
         MessageDeliveryStatus.FAILED -> {
             Text(text = "!", fontSize = 11.sp, color = Color.Red)
         }
+    }
+}
+
+@Composable
+private fun CanvasCheckmark(double: Boolean, color: Color) {
+    androidx.compose.foundation.Canvas(modifier = Modifier.size(if (double) 15.dp else 10.dp, 10.dp)) {
+        val stroke = 1.5f.dp.toPx()
+        // First checkmark
+        val path1 = androidx.compose.ui.graphics.Path().apply {
+            moveTo(size.width * 0.1f, size.height * 0.5f)
+            lineTo(size.width * 0.4f, size.height * 0.85f)
+            lineTo(size.width * 0.85f, size.height * 0.15f)
+        }
+        drawPath(
+            path = path1,
+            color = color,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = stroke,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round
+            )
+        )
     }
 }
