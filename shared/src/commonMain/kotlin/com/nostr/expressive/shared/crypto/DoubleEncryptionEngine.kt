@@ -73,7 +73,8 @@ object DoubleEncryptionEngine {
 
         // Jitter timestamp by up to +/- 172800 seconds (2 days) per NIP-59
         val now = PlatformCrypto.currentTimeSeconds()
-        val jitter = Random.nextLong(-172800, 172800)
+        // Never put created_at into the future; keep within acceptable window (relays reject created_at > now)
+        val jitter = Random.nextLong(-30, 0)
         val randomizedTimestamp = now + jitter
 
         return NostrEvent.createAndSign(

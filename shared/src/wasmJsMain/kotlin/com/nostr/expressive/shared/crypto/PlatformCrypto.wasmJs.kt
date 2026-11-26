@@ -2,7 +2,7 @@ package com.nostr.expressive.shared.crypto
 
 import kotlin.random.Random
 
-@JsFun("() => Date.now() / 1000 | 0")
+@JsFun("() => Math.floor(Date.now() / 1000)")
 private external fun jsCurrentTime(): Double
 
 actual object PlatformCrypto {

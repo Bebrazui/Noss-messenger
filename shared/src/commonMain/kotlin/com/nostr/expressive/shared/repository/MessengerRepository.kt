@@ -413,14 +413,15 @@ class MessengerRepository(
     }
 
     fun startNewChat(peerPubkeyOrNpub: String, peerDisplayName: String): ChatSummary {
-        val pubkeyHex = if (peerPubkeyOrNpub.startsWith("npub1")) {
+        val cleanInput = peerPubkeyOrNpub.trim()
+        val pubkeyHex = if (cleanInput.startsWith("npub1")) {
             try {
-                Nip19.parseNpub(peerPubkeyOrNpub)
+                Nip19.parseNpub(cleanInput).lowercase()
             } catch (_: Exception) {
-                peerPubkeyOrNpub
+                cleanInput.lowercase()
             }
         } else {
-            peerPubkeyOrNpub
+            cleanInput.lowercase()
         }
 
         val chatId = "chat_${pubkeyHex.take(12)}"
@@ -431,7 +432,7 @@ class MessengerRepository(
 
         val newChat = ChatSummary(
             chatId = chatId,
-            peerPubkey = peerPubkeyOrNpub,
+            peerPubkey = pubkeyHex,
             peerDisplayName = peerDisplayName.ifBlank { "User ${pubkeyHex.take(6)}" },
             peerAvatarUrl = null,
             lastMessage = "Chat started",
@@ -466,7 +467,13 @@ class MessengerRepository(
 
         scope.launch {
             try {
-                val chatKey = DoubleEncryptionEngine.deriveConversationKey(myPubkey, recipientPubkey)
+                val targetPubkey = if (recipientPubkey.trim().startsWith("npub1")) {
+                    try { Nip19.parseNpub(recipientPubkey.trim()).lowercase() } catch (_: Exception) { recipientPubkey.trim().lowercase() }
+                } else {
+                    recipientPubkey.trim().lowercase()
+                }
+
+                val chatKey = DoubleEncryptionEngine.deriveConversationKey(myPubkey, targetPubkey)
                 val innerEncrypted = DoubleEncryptionEngine.encryptInnerLayer(
                     text = text,
                     sessionKey = chatKey,
@@ -475,7 +482,7 @@ class MessengerRepository(
 
                 val giftWrapEvent = DoubleEncryptionEngine.createGiftWrapEvent(
                     innerEncryptedJson = innerEncrypted,
-                    recipientPubkey = recipientPubkey
+                    recipientPubkey = targetPubkey
                 )
 
                 relayPool.broadcastEvent(giftWrapEvent)
