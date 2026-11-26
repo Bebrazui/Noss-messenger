@@ -266,12 +266,12 @@ fun CameraVectorIcon(
 }
 
 /**
- * Authentic Geometric Nostr 'N' Logo with proper layer ordering (no sliced pillars)
+ * Authentic Geometric Nostr 'N' Logo matching the exact user SVG specification
  */
 @Composable
 fun NostrLogo(
     modifier: Modifier = Modifier,
-    size: Dp = 96.dp,
+    size: Dp = 110.dp,
     tint: Color = MaterialTheme.colorScheme.onSurface,
     cutoutColor: Color = MaterialTheme.colorScheme.background
 ) {
@@ -279,10 +279,32 @@ fun NostrLogo(
         val w = this.size.width
         val h = this.size.height
 
+        // Uniform scaling preserving exact 273 x 301.393 aspect ratio without shearing
+        val scale = minOf(w / 273f, h / 301.393f)
+        val dx = (w - 273f * scale) / 2f
+        val dy = (h - 301.393f * scale) / 2f
+
         withTransform({
-            scale(w / 273f, h / 301.393f, pivot = Offset.Zero)
+            translate(dx, dy)
+            scale(scale, scale, pivot = Offset.Zero)
         }) {
-            // 1. Diagonal bar FIRST (behind cutouts and pillars)
+            // Left bar
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(6f, 3.958f),
+                size = Size(78.708f, 293.387f),
+                cornerRadius = CornerRadius(6f, 6f)
+            )
+
+            // Right bar
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(192.932f, 3.958f),
+                size = Size(77.068f, 287.516f),
+                cornerRadius = CornerRadius(6f, 6f)
+            )
+
+            // Diagonal bar rotated by -34.8 degrees around (17.682, 43.787)
             withTransform({
                 translate(17.682f, 43.787f)
                 rotate(-34.799f, pivot = Offset.Zero)
@@ -290,37 +312,23 @@ fun NostrLogo(
                 drawRoundRect(
                     color = tint,
                     topLeft = Offset.Zero,
-                    size = Size(76.722f, 305f),
+                    size = Size(76.722f, 313.715f),
                     cornerRadius = CornerRadius(10f, 10f)
                 )
             }
 
-            // 2. Cutouts SECOND (slices only the diagonal, never the pillars)
+            // Horizontal cut 1: x = 0..192.932, y = 98.087..123.087
             drawRect(
                 color = cutoutColor,
                 topLeft = Offset(0f, 98.087f),
-                size = Size(273f, 25f)
+                size = Size(192.932f, 25f)
             )
+
+            // Horizontal cut 2: x = 84.708..273, y = 178.217..203.217
             drawRect(
                 color = cutoutColor,
-                topLeft = Offset(0f, 178.217f),
-                size = Size(273f, 25f)
-            )
-
-            // 3. Left vertical bar THIRD (on top of cutouts, solid & rounded)
-            drawRoundRect(
-                color = tint,
-                topLeft = Offset(6f, 3.958f),
-                size = Size(78.708f, 293.387f),
-                cornerRadius = CornerRadius(14f, 14f)
-            )
-
-            // 4. Right vertical bar FOURTH (on top of cutouts, solid & rounded)
-            drawRoundRect(
-                color = tint,
-                topLeft = Offset(192.932f, 3.958f),
-                size = Size(77.068f, 287.516f),
-                cornerRadius = CornerRadius(14f, 14f)
+                topLeft = Offset(84.708f, 178.217f),
+                size = Size(188.292f, 25f)
             )
         }
     }
