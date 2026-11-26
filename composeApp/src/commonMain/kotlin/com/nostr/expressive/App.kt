@@ -219,7 +219,8 @@ fun KeyBackupScreen(
 
                 NostrLogo(
                     size = 72.dp,
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    cutoutColor = MaterialTheme.colorScheme.background
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -364,8 +365,9 @@ fun OnboardingScreen(onIdentityReady: (NostrIdentity, Boolean) -> Unit) {
                 verticalArrangement = Arrangement.Center
             ) {
                 NostrLogo(
-                    size = 96.dp,
-                    tint = MaterialTheme.colorScheme.primary
+                    size = 110.dp,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    cutoutColor = MaterialTheme.colorScheme.background
                 )
 
                 Spacer(modifier = Modifier.height(28.dp))
