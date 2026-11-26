@@ -1,7 +1,13 @@
 package com.nostr.expressive.shared.model
 
+import com.nostr.expressive.shared.crypto.PlatformCrypto
+import com.nostr.expressive.shared.crypto.Secp256k1
+import com.nostr.expressive.shared.crypto.toHex
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 
 @Serializable
 data class NostrEvent(
@@ -12,7 +18,70 @@ data class NostrEvent(
     val tags: List<List<String>> = emptyList(),
     val content: String = "",
     val sig: String = ""
-)
+) {
+    companion object {
+        private val json = Json
+
+        fun serializeNip01(
+            pubkey: String,
+            createdAt: Long,
+            kind: Int,
+            tags: List<List<String>>,
+            content: String
+        ): String {
+            val arr = buildJsonArray {
+                add(JsonPrimitive(0))
+                add(JsonPrimitive(pubkey.lowercase()))
+                add(JsonPrimitive(createdAt))
+                add(JsonPrimitive(kind))
+                add(buildJsonArray {
+                    tags.forEach { tagList ->
+                        add(buildJsonArray {
+                            tagList.forEach { tagItem ->
+                                add(JsonPrimitive(tagItem))
+                            }
+                        })
+                    }
+                })
+                add(JsonPrimitive(content))
+            }
+            return json.encodeToString(JsonElement.serializer(), arr)
+        }
+
+        fun calculateId(
+            pubkey: String,
+            createdAt: Long,
+            kind: Int,
+            tags: List<List<String>>,
+            content: String
+        ): String {
+            val serialized = serializeNip01(pubkey, createdAt, kind, tags, content)
+            return PlatformCrypto.sha256(serialized.encodeToByteArray()).toHex()
+        }
+
+        fun createAndSign(
+            privkeyHex: String,
+            kind: Int,
+            content: String,
+            tags: List<List<String>> = emptyList(),
+            createdAt: Long = PlatformCrypto.currentTimeSeconds()
+        ): NostrEvent {
+            val cleanPrivHex = privkeyHex.trim().lowercase()
+            val pubkey = Secp256k1.getPublicKey(cleanPrivHex)
+            val id = calculateId(pubkey, createdAt, kind, tags, content)
+            val sig = Secp256k1.signSchnorr(id, cleanPrivHex)
+            return NostrEvent(
+                id = id,
+                pubkey = pubkey,
+                created_at = createdAt,
+                kind = kind,
+                tags = tags,
+                content = content,
+                sig = sig
+            )
+        }
+    }
+}
 
 @Serializable
 data class NostrFilter(

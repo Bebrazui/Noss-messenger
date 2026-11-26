@@ -30,9 +30,8 @@ object KeyManager {
         val privBytes = PlatformCrypto.randomBytes(32)
         val privHex = privBytes.toHex()
         
-        // Derive 32-byte public key (sha256 of privkey for standard multiplatform demo)
-        val pubBytes = PlatformCrypto.sha256(privBytes)
-        val pubHex = pubBytes.toHex()
+        // Derive 32-byte BIP-340 secp256k1 x-only public key
+        val pubHex = Secp256k1.getPublicKey(privHex)
 
         val nsec = Nip19.toNsec(privHex)
         val npub = Nip19.toNpub(pubHex)
@@ -59,14 +58,13 @@ object KeyManager {
             "Invalid private key: must be a 64-character hex string or valid nsec1... address"
         }
 
-        val privBytes = privHex.lowercase().hexToByteArray()
-        val pubBytes = PlatformCrypto.sha256(privBytes)
-        val pubHex = pubBytes.toHex()
+        val cleanPrivHex = privHex.lowercase()
+        val pubHex = Secp256k1.getPublicKey(cleanPrivHex)
 
         val identity = NostrIdentity(
-            privkeyHex = privHex.lowercase(),
+            privkeyHex = cleanPrivHex,
             pubkeyHex = pubHex,
-            nsec = Nip19.toNsec(privHex.lowercase()),
+            nsec = Nip19.toNsec(cleanPrivHex),
             npub = Nip19.toNpub(pubHex)
         )
         saveIdentity(identity)

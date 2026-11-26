@@ -69,27 +69,19 @@ object DoubleEncryptionEngine {
         recipientPubkey: String
     ): NostrEvent {
         // Ephemeral random keypair for the outer wrap
-        val ephemeralPrivKey = PlatformCrypto.randomBytes(32)
-        val ephemeralPubKey = PlatformCrypto.sha256(ephemeralPrivKey).toHex() // mock pubkey derivation
+        val ephemeralPrivKeyHex = PlatformCrypto.randomBytes(32).toHex()
 
         // Jitter timestamp by up to +/- 172800 seconds (2 days) per NIP-59
         val now = PlatformCrypto.currentTimeSeconds()
         val jitter = Random.nextLong(-172800, 172800)
         val randomizedTimestamp = now + jitter
 
-        val eventWithoutId = NostrEvent(
-            pubkey = ephemeralPubKey,
-            created_at = randomizedTimestamp,
+        return NostrEvent.createAndSign(
+            privkeyHex = ephemeralPrivKeyHex,
             kind = NostrKinds.GIFT_WRAP,
-            tags = listOf(listOf("p", recipientPubkey)),
             content = innerEncryptedJson,
-            sig = "dummy_schnorr_sig_64b"
+            tags = listOf(listOf("p", recipientPubkey.lowercase())),
+            createdAt = randomizedTimestamp
         )
-        
-        // Event ID is sha256 of serialized event
-        val serialized = "${eventWithoutId.pubkey}:${eventWithoutId.created_at}:${eventWithoutId.kind}:${eventWithoutId.content}"
-        val id = PlatformCrypto.sha256(serialized.encodeToByteArray()).toHex()
-        
-        return eventWithoutId.copy(id = id)
     }
 }
