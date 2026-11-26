@@ -1,9 +1,16 @@
 package com.nostr.expressive.ui.components
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -259,64 +266,48 @@ fun CameraVectorIcon(
 }
 
 /**
- * Geometric Nostr 'N' logo adapted with proper background cutout
+ * Modern, crisp N monogram for Noss (without broken cutout math)
  */
 @Composable
 fun NostrLogo(
     modifier: Modifier = Modifier,
     size: Dp = 96.dp,
-    tint: Color = LocalContentColor.current,
-    cutoutColor: Color = Color(0xFF131314)
+    tint: Color = MaterialTheme.colorScheme.primary,
+    cutoutColor: Color = Color.Unspecified
 ) {
-    Canvas(modifier = modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
+    Surface(
+        modifier = modifier.size(size),
+        shape = RoundedCornerShape(26.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+        shadowElevation = 6.dp
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.size(size * 0.52f)) {
+                val w = this.size.width
+                val h = this.size.height
 
-        withTransform({
-            scale(w / 273f, h / 301.393f, pivot = Offset.Zero)
-        }) {
-            // Left vertical bar
-            drawRoundRect(
-                color = tint,
-                topLeft = Offset(6f, 3.958f),
-                size = Size(78.708f, 293.387f),
-                cornerRadius = CornerRadius(6f, 6f)
-            )
-
-            // Right vertical bar
-            drawRoundRect(
-                color = tint,
-                topLeft = Offset(192.932f, 3.958f),
-                size = Size(77.068f, 287.516f),
-                cornerRadius = CornerRadius(6f, 6f)
-            )
-
-            // Diagonal bar rotated by -34.8 degrees
-            withTransform({
-                translate(17.682f, 43.787f)
-                rotate(-34.799f, pivot = Offset.Zero)
-            }) {
-                drawRoundRect(
-                    color = tint,
-                    topLeft = Offset.Zero,
-                    size = Size(76.722f, 313.715f),
-                    cornerRadius = CornerRadius(10f, 10f)
+                val path = Path().apply {
+                    moveTo(w * 0.22f, h * 0.18f)
+                    lineTo(w * 0.36f, h * 0.18f)
+                    lineTo(w * 0.66f, h * 0.64f)
+                    lineTo(w * 0.66f, h * 0.18f)
+                    lineTo(w * 0.78f, h * 0.18f)
+                    lineTo(w * 0.78f, h * 0.82f)
+                    lineTo(w * 0.64f, h * 0.82f)
+                    lineTo(w * 0.34f, h * 0.36f)
+                    lineTo(w * 0.34f, h * 0.82f)
+                    lineTo(w * 0.22f, h * 0.82f)
+                    close()
+                }
+                drawPath(
+                    path = path,
+                    color = tint
                 )
             }
-
-            // Top horizontal cutout
-            drawRect(
-                color = cutoutColor,
-                topLeft = Offset(0f, 98.087f),
-                size = Size(192.932f, 25f)
-            )
-
-            // Bottom horizontal cutout
-            drawRect(
-                color = cutoutColor,
-                topLeft = Offset(84.708f, 178.217f),
-                size = Size(188.292f, 25f)
-            )
         }
     }
 }

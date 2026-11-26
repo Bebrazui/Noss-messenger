@@ -30,7 +30,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -180,6 +182,13 @@ fun KeyBackupScreen(
     val clipboardManager = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
 
+    val backupTitle = runCatching { stringResource(Res.string.backup_title) }.getOrNull()?.ifBlank { null } ?: "Ваш секретный ключ"
+    val backupSubtitle = runCatching { stringResource(Res.string.backup_subtitle) }.getOrNull()?.ifBlank { null } ?: "Сохраните его сейчас. В Noss нет серверов, поэтому восстановить аккаунт без этого ключа невозможно."
+    val copyBtnText = runCatching { stringResource(Res.string.backup_copy_btn) }.getOrNull()?.ifBlank { null } ?: "Скопировать секретный ключ"
+    val continueBtnText = runCatching { stringResource(Res.string.backup_continue_btn) }.getOrNull()?.ifBlank { null } ?: "Я сохранил ключ"
+    val secretKeyLabel = runCatching { stringResource(Res.string.profile_secret_key) }.getOrNull()?.ifBlank { null } ?: "Секретный ключ"
+    val copiedLabel = runCatching { stringResource(Res.string.profile_copied) }.getOrNull()?.ifBlank { null } ?: "Скопировано"
+
     LaunchedEffect(copied) {
         if (copied) {
             delay(2000L)
@@ -187,13 +196,17 @@ fun KeyBackupScreen(
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .widthIn(max = 440.dp)
+                .fillMaxWidth()
+                .fillMaxHeight()
                 .padding(horizontal = 24.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
@@ -204,25 +217,15 @@ fun KeyBackupScreen(
             ) {
                 Spacer(modifier = Modifier.height(20.dp))
 
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "N",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+                NostrLogo(
+                    size = 72.dp,
+                    tint = MaterialTheme.colorScheme.primary
+                )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Text(
-                    text = stringResource(Res.string.backup_title),
+                    text = backupTitle,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -232,7 +235,7 @@ fun KeyBackupScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = stringResource(Res.string.backup_subtitle),
+                    text = backupSubtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -254,7 +257,7 @@ fun KeyBackupScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = stringResource(Res.string.profile_secret_key),
+                                text = secretKeyLabel,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold
@@ -265,7 +268,7 @@ fun KeyBackupScreen(
                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                 ) {
                                     Text(
-                                        text = stringResource(Res.string.profile_copied),
+                                        text = copiedLabel,
                                         color = MaterialTheme.colorScheme.primary,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
@@ -299,7 +302,7 @@ fun KeyBackupScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
                     Text(
-                        text = if (copied) "✓ Ключ скопирован" else stringResource(Res.string.backup_copy_btn),
+                        text = if (copied) "✓ Ключ скопирован" else copyBtnText,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -314,7 +317,7 @@ fun KeyBackupScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Text(
-                    text = stringResource(Res.string.backup_continue_btn),
+                    text = continueBtnText,
                     color = MaterialTheme.colorScheme.onPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
@@ -330,13 +333,25 @@ fun OnboardingScreen(onIdentityReady: (NostrIdentity, Boolean) -> Unit) {
     var nsecInput by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+    val welcomeTitle = runCatching { stringResource(Res.string.welcome_title) }.getOrNull()?.ifBlank { null } ?: "Привет, это Noss"
+    val welcomeSubtitle = runCatching { stringResource(Res.string.welcome_subtitle) }.getOrNull()?.ifBlank { null } ?: "Децентрализованный приватный мессенджер без серверов"
+    val welcomeStartBtn = runCatching { stringResource(Res.string.welcome_start_btn) }.getOrNull()?.ifBlank { null } ?: "Приступить"
+    val welcomeHaveKeyBtn = runCatching { stringResource(Res.string.welcome_have_key_btn) }.getOrNull()?.ifBlank { null } ?: "У меня уже есть ключ (nsec)"
+    val welcomeImportBtn = runCatching { stringResource(Res.string.welcome_import_btn) }.getOrNull()?.ifBlank { null } ?: "Войти по ключу"
+    val welcomeNsecHint = runCatching { stringResource(Res.string.welcome_nsec_hint) }.getOrNull()?.ifBlank { null } ?: "nsec1... или hex приватный ключ"
+    val welcomeBackBtn = runCatching { stringResource(Res.string.welcome_back_btn) }.getOrNull()?.ifBlank { null } ?: "Назад"
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .widthIn(max = 440.dp)
+                .fillMaxWidth()
+                .fillMaxHeight()
                 .padding(horizontal = 28.dp, vertical = 36.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
@@ -348,28 +363,28 @@ fun OnboardingScreen(onIdentityReady: (NostrIdentity, Boolean) -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // Geometric Nostr 'N' logo adapted with proper background cutout
                 NostrLogo(
-                    size = 110.dp,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    cutoutColor = MaterialTheme.colorScheme.background
+                    size = 96.dp,
+                    tint = MaterialTheme.colorScheme.primary
                 )
 
                 Spacer(modifier = Modifier.height(28.dp))
 
                 Text(
-                    text = stringResource(Res.string.welcome_title),
+                    text = welcomeTitle,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = stringResource(Res.string.welcome_subtitle),
+                    text = welcomeSubtitle,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
                 )
             }
 
@@ -391,7 +406,7 @@ fun OnboardingScreen(onIdentityReady: (NostrIdentity, Boolean) -> Unit) {
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Text(
-                            text = stringResource(Res.string.welcome_start_btn),
+                            text = welcomeStartBtn,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onPrimary
@@ -405,7 +420,7 @@ fun OnboardingScreen(onIdentityReady: (NostrIdentity, Boolean) -> Unit) {
                         modifier = Modifier.fillMaxWidth().height(44.dp)
                     ) {
                         Text(
-                            text = stringResource(Res.string.welcome_have_key_btn),
+                            text = welcomeHaveKeyBtn,
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -417,7 +432,7 @@ fun OnboardingScreen(onIdentityReady: (NostrIdentity, Boolean) -> Unit) {
                             nsecInput = it
                             errorMessage = null
                         },
-                        placeholder = { Text(stringResource(Res.string.welcome_nsec_hint)) },
+                        placeholder = { Text(welcomeNsecHint) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
@@ -452,7 +467,7 @@ fun OnboardingScreen(onIdentityReady: (NostrIdentity, Boolean) -> Unit) {
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Text(
-                            text = stringResource(Res.string.welcome_import_btn),
+                            text = welcomeImportBtn,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onPrimary
@@ -462,7 +477,7 @@ fun OnboardingScreen(onIdentityReady: (NostrIdentity, Boolean) -> Unit) {
                     Spacer(modifier = Modifier.height(6.dp))
 
                     TextButton(onClick = { importMode = false }) {
-                        Text(stringResource(Res.string.welcome_back_btn), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(welcomeBackBtn, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
