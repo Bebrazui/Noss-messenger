@@ -1196,8 +1196,7 @@ fun ChatListScreen(
             communityUsers.filter { user ->
                 user.name.lowercase().contains(clean) ||
                 user.displayName.lowercase().contains(clean) ||
-                user.npub.lowercase().contains(clean) ||
-                user.pubkeyHex.lowercase().contains(clean)
+                (clean.length >= 8 && (user.npub.lowercase().contains(clean) || user.pubkeyHex.lowercase().contains(clean)))
             }
         }
     }

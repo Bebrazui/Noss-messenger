@@ -163,8 +163,7 @@ class MessengerRepository(
         return _communityUsers.value.filter { user ->
             user.name.lowercase().contains(clean) ||
             user.displayName.lowercase().contains(clean) ||
-            user.npub.lowercase().contains(clean) ||
-            user.pubkeyHex.lowercase().contains(clean)
+            (clean.length >= 8 && (user.npub.lowercase().contains(clean) || user.pubkeyHex.lowercase().contains(clean)))
         }
     }
 
@@ -232,11 +231,18 @@ class MessengerRepository(
         relayPool.start()
         relayPool.subscribe("sub_inbox", listOf(NostrKinds.GIFT_WRAP), pTags = listOf(myPubkey))
         relayPool.subscribe("sub_public_channels", listOf(NostrKinds.CHANNEL_CREATE))
-        relayPool.subscribe("sub_metadata", listOf(NostrKinds.METADATA), limit = 50)
-        relayPool.subscribe("sub_noss_users", listOf(NostrKinds.METADATA), tTags = listOf("noss", "noss_user"), limit = 100)
+        relayPool.subscribe("sub_noss_users", listOf(NostrKinds.METADATA), tTags = listOf("noss", "noss_user"), limit = 50)
 
-        // Populate known usernames from persisted community users
-        localDb.getCommunityUsers().forEach { user ->
+        // Clean out random non-Noss global accounts from previous sessions
+        val cleanCommunity = localDb.getCommunityUsers().filter { user ->
+            user.pubkeyHex.equals(myPubkey, ignoreCase = true) ||
+            savedChats.any { it.peerPubkey.equals(user.pubkeyHex, ignoreCase = true) }
+        }
+        _communityUsers.value = cleanCommunity
+        localDb.saveCommunityUsers(cleanCommunity)
+
+        // Populate known usernames from active chats and verified community users
+        cleanCommunity.forEach { user ->
             if (user.name.isNotBlank()) knownUsernames[user.name.trim().lowercase()] = user.pubkeyHex
         }
 
@@ -626,8 +632,16 @@ class MessengerRepository(
                         _isProfileConfigured.value = true
                     }
 
-                    // Only add meaningful registered profiles to community users list to prevent random anonymous junk
-                    if (isMeaningfulProfile || senderHex == myPubkey.lowercase()) {
+                    // Only add verified Noss users or chat peers to prevent random global Nostr strangers/bots
+                    val isNossUser = event.tags.any { tag ->
+                        (tag.getOrNull(0) == "t" && (tag.getOrNull(1) == "noss" || tag.getOrNull(1) == "noss_user")) ||
+                        (tag.getOrNull(0) == "d" && tag.getOrNull(1) == "noss_user")
+                    }
+                    val isRelevant = (isNossUser && isMeaningfulProfile) ||
+                        senderHex == myPubkey.lowercase() ||
+                        _chats.value.any { it.peerPubkey.equals(senderHex, ignoreCase = true) }
+
+                    if (isRelevant) {
                         val nossUser = NossUser(
                             pubkeyHex = senderHex,
                             npub = com.nostr.expressive.shared.crypto.Nip19.toNpub(senderHex),
