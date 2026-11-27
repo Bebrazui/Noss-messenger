@@ -168,33 +168,19 @@ fun App() {
                 )
             }
 
-            LaunchedEffect(isImportedSession) {
-                if (isImportedSession) {
-                    repository.markProfileConfigured()
+            LaunchedEffect(identity.pubkeyHex) {
+                repository.markProfileConfigured()
+            }
+
+            MainAppContent(
+                identity = identity,
+                repository = repository,
+                onLogout = {
+                    KeyManager.clearIdentity()
+                    currentIdentity = null
                     isImportedSession = false
                 }
-            }
-
-            val isProfileConfigured by repository.isProfileConfigured.collectAsState()
-
-            if (!isProfileConfigured && !isImportedSession) {
-                ProfileSetupScreen(
-                    repository = repository,
-                    onComplete = {
-                        // isProfileConfigured updates automatically in repository
-                    }
-                )
-            } else {
-                MainAppContent(
-                    identity = identity,
-                    repository = repository,
-                    onLogout = {
-                        KeyManager.clearIdentity()
-                        currentIdentity = null
-                        isImportedSession = false
-                    }
-                )
-            }
+            )
         }
     }
 }

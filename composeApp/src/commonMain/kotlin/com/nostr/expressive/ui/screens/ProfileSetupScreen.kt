@@ -29,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -151,7 +152,8 @@ fun ProfileSetupScreen(
                 // Top Navigation bar
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -159,6 +161,15 @@ fun ProfileSetupScreen(
                         }
                     } else {
                         Spacer(modifier = Modifier.width(24.dp))
+                    }
+
+                    if (!isEditFromProfile) {
+                        TextButton(onClick = {
+                            repository.markProfileConfigured()
+                            onComplete()
+                        }) {
+                            Text("Пропустить", color = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
 
