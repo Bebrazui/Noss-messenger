@@ -520,6 +520,33 @@ class MessengerRepository(
         }
     }
 
+    fun clearChat(chatId: String) {
+        localDb.clearChat(chatId)
+        _messages.value = _messages.value + (chatId to emptyList())
+        _chats.value = _chats.value.map {
+            if (it.chatId == chatId) it.copy(lastMessage = "", unreadCount = 0) else it
+        }
+    }
+
+    fun deleteChat(chatId: String) {
+        localDb.deleteChat(chatId)
+        _messages.value = _messages.value - chatId
+        _chats.value = _chats.value.filter { it.chatId != chatId }
+    }
+
+    fun deleteMessage(chatId: String, messageId: String) {
+        localDb.deleteMessage(chatId, messageId)
+        val current = _messages.value[chatId] ?: emptyList()
+        val updated = current.filter { it.id != messageId }
+        _messages.value = _messages.value + (chatId to updated)
+        val lastMsg = updated.lastOrNull()?.let {
+            if (it.text.startsWith("nostr:media:")) "📷 Файл" else it.text
+        } ?: ""
+        _chats.value = _chats.value.map {
+            if (it.chatId == chatId) it.copy(lastMessage = lastMsg) else it
+        }
+    }
+
     private fun updateMessageStatus(chatId: String, messageId: String, newStatus: MessageDeliveryStatus) {
         localDb.updateMessageStatus(chatId, messageId, newStatus)
         val list = _messages.value[chatId] ?: return

@@ -81,6 +81,39 @@ class LocalDatabase(
         persist()
     }
 
+    fun clearChat(chatId: String) {
+        state = state.copy(messages = state.messages + (chatId to emptyList()))
+        val updatedChats = state.chats.map {
+            if (it.chatId == chatId) it.copy(lastMessage = "", unreadCount = 0) else it
+        }
+        state = state.copy(chats = updatedChats)
+        persist()
+    }
+
+    fun deleteChat(chatId: String) {
+        state = state.copy(
+            chats = state.chats.filter { it.chatId != chatId },
+            messages = state.messages - chatId
+        )
+        persist()
+    }
+
+    fun deleteMessage(chatId: String, messageId: String) {
+        val currentList = state.messages[chatId] ?: return
+        val updatedList = currentList.filter { it.id != messageId }
+        val lastMsg = updatedList.lastOrNull()?.let {
+            if (it.text.startsWith("nostr:media:")) "📷 Файл" else it.text
+        } ?: ""
+        val lastTs = updatedList.lastOrNull()?.timestamp ?: 0L
+        state = state.copy(
+            messages = state.messages + (chatId to updatedList),
+            chats = state.chats.map {
+                if (it.chatId == chatId) it.copy(lastMessage = lastMsg, lastTimestamp = if (lastTs > 0) lastTs else it.lastTimestamp) else it
+            }
+        )
+        persist()
+    }
+
     fun getChannels(): List<com.nostr.expressive.shared.repository.PublicChannel> = state.channels
 
     fun getChannelMessages(channelId: String): List<ChatMessage> = state.channelMessages[channelId] ?: emptyList()

@@ -51,6 +51,16 @@
     <string name="profile_settings_btn">Настройки и безопасность</string>
     <string name="profile_settings_desc">Ключи доступа, резервная копия и выход</string>
 
+    <!-- Chat Actions -->
+    <string name="chat_menu_clear">Очистить историю</string>
+    <string name="chat_menu_delete">Удалить чат</string>
+    <string name="chat_menu_delete_msg">Удалить сообщение</string>
+    <string name="chat_menu_copy_msg">Копировать текст</string>
+    <string name="chat_delete_confirm_title">Удалить диалог?</string>
+    <string name="chat_delete_confirm_desc">История переписки будет полностью удалена с устройства.</string>
+    <string name="chat_clear_confirm_title">Очистить историю?</string>
+    <string name="chat_clear_confirm_desc">Все сообщения в этом диалоге будут удалены.</string>
+
     <!-- Logout Safety Sheet -->
     <string name="logout_dialog_title">Выход</string>
     <string name="logout_dialog_warning">Сохраните секретный ключ перед выходом. В Noss нет серверов: без ключа восстановить доступ невозможно.</string>

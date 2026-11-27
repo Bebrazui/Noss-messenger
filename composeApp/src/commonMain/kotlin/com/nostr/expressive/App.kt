@@ -23,7 +23,12 @@ import com.nostr.expressive.ui.picker.toImageBitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -74,6 +79,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -588,7 +594,9 @@ fun MainAppContent(
                             activeChannelAbout = channel.about
                             repository.subscribeToChannel(channel.id)
                             currentScreen = Screen.CHANNEL_DETAIL
-                        }
+                        },
+                        onClearChat = { chat -> repository.clearChat(chat.chatId) },
+                        onDeleteChat = { chat -> repository.deleteChat(chat.chatId) }
                     )
                 }
                 Screen.PROFILE -> {
@@ -639,6 +647,16 @@ fun MainAppContent(
                             },
                             onSendMedia = {
                                 chatImagePicker()
+                            },
+                            onClearChat = {
+                                repository.clearChat(chatId)
+                            },
+                            onDeleteChat = {
+                                repository.deleteChat(chatId)
+                                currentScreen = Screen.CHATS
+                            },
+                            onDeleteMessage = { messageId ->
+                                repository.deleteMessage(chatId, messageId)
                             }
                         )
                     }
@@ -1068,10 +1086,13 @@ fun ChatListScreen(
     repository: MessengerRepository,
     onChatClick: (ChatSummary) -> Unit,
     onUserClick: (com.nostr.expressive.shared.repository.NossUser) -> Unit,
-    onChannelClick: (PublicChannel) -> Unit
+    onChannelClick: (PublicChannel) -> Unit,
+    onClearChat: (ChatSummary) -> Unit = {},
+    onDeleteChat: (ChatSummary) -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     val communityUsers by repository.communityUsers.collectAsState()
+    var selectedChatForActions by remember { mutableStateOf<ChatSummary?>(null) }
 
     LaunchedEffect(searchQuery) {
         if (searchQuery.isNotBlank()) {
@@ -1249,7 +1270,8 @@ fun ChatListScreen(
                         ChatListItem(
                             chat = chat,
                             shape = getM3EConnectedShape(index, filteredChats.size),
-                            onClick = { onChatClick(chat) }
+                            onClick = { onChatClick(chat) },
+                            onLongClick = { selectedChatForActions = chat }
                         )
                     }
                 }
@@ -1309,11 +1331,85 @@ fun ChatListScreen(
                         ChatListItem(
                             chat = chat,
                             shape = getM3EConnectedShape(index, filteredChats.size),
-                            onClick = { onChatClick(chat) }
+                            onClick = { onChatClick(chat) },
+                            onLongClick = { selectedChatForActions = chat }
                         )
                     }
                 }
             }
+        }
+    }
+
+    ExpressiveModalBottomSheet(
+        visible = selectedChatForActions != null,
+        onDismissRequest = { selectedChatForActions = null }
+    ) {
+        selectedChatForActions?.let { chat ->
+            Box(
+                modifier = Modifier
+                    .width(36.dp)
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                NossAvatar(
+                    avatarUrl = chat.peerAvatarUrl,
+                    displayName = chat.peerDisplayName,
+                    size = 40.dp
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(chat.peerDisplayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Диалог", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onClearChat(chat)
+                        selectedChatForActions = null
+                    },
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(stringResource(Res.string.chat_menu_clear), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onDeleteChat(chat)
+                        selectedChatForActions = null
+                    },
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(stringResource(Res.string.chat_menu_delete), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -1377,13 +1473,20 @@ fun NossUserListItem(
 fun ChatListItem(
     chat: ChatSummary,
     shape: Shape = RoundedCornerShape(18.dp),
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {}
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 1.5.dp),
+            .padding(horizontal = 16.dp, vertical = 1.5.dp)
+            .clip(shape)
+            .pointerInput(chat.chatId) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onLongPress = { onLongClick() }
+                )
+            },
         shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
@@ -1446,9 +1549,17 @@ fun ChatDetailScreen(
     onBack: () -> Unit,
     onSendMessage: (String) -> Unit,
     onSendMedia: () -> Unit,
-    avatarUrl: String? = null
+    avatarUrl: String? = null,
+    onClearChat: () -> Unit = {},
+    onDeleteChat: () -> Unit = {},
+    onDeleteMessage: (String) -> Unit = {}
 ) {
     var inputText by remember { mutableStateOf("") }
+    var showChatMenu by remember { mutableStateOf(false) }
+    var showClearConfirm by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var selectedMessageForAction by remember { mutableStateOf<ChatMessage?>(null) }
+    val clipboardManager = LocalClipboardManager.current
 
     Scaffold(
         topBar = {
@@ -1467,6 +1578,15 @@ fun ChatDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         ArrowBackIcon(tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showChatMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Menu",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -1533,9 +1653,296 @@ fun ChatDetailScreen(
             contentPadding = PaddingValues(vertical = 12.dp)
         ) {
             items(messages) { msg ->
-                ExpressiveMessageBubble(message = msg)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pointerInput(msg.id) {
+                            detectTapGestures(
+                                onLongPress = {
+                                    selectedMessageForAction = msg
+                                }
+                            )
+                        }
+                ) {
+                    ExpressiveMessageBubble(message = msg)
+                }
             }
         }
+    }
+
+    // Chat Actions Menu Sheet (Clear history, Delete chat)
+    ExpressiveModalBottomSheet(
+        visible = showChatMenu,
+        onDismissRequest = { showChatMenu = false }
+    ) {
+        Box(
+            modifier = Modifier
+                .width(36.dp)
+                .height(4.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    showChatMenu = false
+                    showClearConfirm = true
+                },
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(Res.string.chat_menu_clear),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    showChatMenu = false
+                    showDeleteConfirm = true
+                },
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = stringResource(Res.string.chat_menu_delete),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+
+    // Message Actions Sheet (Copy, Delete)
+    ExpressiveModalBottomSheet(
+        visible = selectedMessageForAction != null,
+        onDismissRequest = { selectedMessageForAction = null }
+    ) {
+        selectedMessageForAction?.let { msg ->
+            Box(
+                modifier = Modifier
+                    .width(36.dp)
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val preview = if (msg.text.startsWith("nostr:media:")) "📷 Файл" else msg.text
+            Text(
+                text = preview.take(120),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3
+            )
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        if (!msg.text.startsWith("nostr:media:")) {
+                            clipboardManager.setText(AnnotatedString(msg.text))
+                        }
+                        selectedMessageForAction = null
+                    },
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(Res.string.chat_menu_copy_msg),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onDeleteMessage(msg.id)
+                        selectedMessageForAction = null
+                    },
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = stringResource(Res.string.chat_menu_delete_msg),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+
+    // Confirmation Sheet: Clear History
+    ExpressiveModalBottomSheet(
+        visible = showClearConfirm,
+        onDismissRequest = { showClearConfirm = false }
+    ) {
+        Box(
+            modifier = Modifier
+                .width(36.dp)
+                .height(4.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = stringResource(Res.string.chat_clear_confirm_title),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(Res.string.chat_clear_confirm_desc),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = { showClearConfirm = false },
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = FloatingPillShape,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+            ) {
+                Text(stringResource(Res.string.btn_cancel), color = MaterialTheme.colorScheme.onSurface)
+            }
+            Button(
+                onClick = {
+                    showClearConfirm = false
+                    onClearChat()
+                },
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = FloatingPillShape,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                Text(stringResource(Res.string.chat_menu_clear), color = MaterialTheme.colorScheme.onError)
+            }
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+    }
+
+    // Confirmation Sheet: Delete Chat
+    ExpressiveModalBottomSheet(
+        visible = showDeleteConfirm,
+        onDismissRequest = { showDeleteConfirm = false }
+    ) {
+        Box(
+            modifier = Modifier
+                .width(36.dp)
+                .height(4.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = stringResource(Res.string.chat_delete_confirm_title),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.error
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(Res.string.chat_delete_confirm_desc),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = { showDeleteConfirm = false },
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = FloatingPillShape,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+            ) {
+                Text(stringResource(Res.string.btn_cancel), color = MaterialTheme.colorScheme.onSurface)
+            }
+            Button(
+                onClick = {
+                    showDeleteConfirm = false
+                    onDeleteChat()
+                },
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = FloatingPillShape,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                Text(stringResource(Res.string.chat_menu_delete), color = MaterialTheme.colorScheme.onError)
+            }
+        }
+        Spacer(modifier = Modifier.height(20.dp))
     }
 }
 
