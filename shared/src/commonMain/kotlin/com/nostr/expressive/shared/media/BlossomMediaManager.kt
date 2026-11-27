@@ -33,7 +33,7 @@ object BlossomMediaManager {
 
     private const val MEDIA_PREFIX = "[MEDIA_ENC]"
     // Free Blossom / NIP-96 public host endpoint
-    private const val PUBLIC_BLOSSOM_HOST = "https://nostr.build/api/v2/upload"
+    private const val PUBLIC_MEDIA_HOST = "https://catbox.moe/user/api.php"
 
     /**
      * Encrypt raw media bytes locally with AES-256-GCM.
@@ -93,36 +93,34 @@ object BlossomMediaManager {
     }
 
     /**
-     * Upload encrypted binary to free public Blossom/NIP-96 server
+     * Upload encrypted binary to free public server
      */
     suspend fun uploadEncryptedBlob(ciphertext: ByteArray, mimeType: String = "application/octet-stream"): String {
+        val sha256Hex = PlatformCrypto.sha256(ciphertext).toHex()
         return try {
-            val response = client.post(PUBLIC_BLOSSOM_HOST) {
+            val response = client.post(PUBLIC_MEDIA_HOST) {
                 setBody(
                     MultiPartFormDataContent(
                         formData {
-                            append("file", ciphertext, Headers.build {
+                            append("reqtype", "fileupload")
+                            append("fileToUpload", ciphertext, Headers.build {
                                 append(HttpHeaders.ContentType, mimeType)
-                                append(HttpHeaders.ContentDisposition, "filename=\"blob.enc\"")
+                                append(HttpHeaders.ContentDisposition, "filename=\"blob_$sha256Hex.enc\"")
                             })
                         }
                     )
                 )
             }
-            val body = response.bodyAsText()
-            // Extract URL from json response if present
-            val parsed = json.parseToJsonElement(body).jsonObject
-            parsed["url"]?.jsonPrimitive?.content
-                ?: parsed["data"]?.jsonObject?.get("url")?.jsonPrimitive?.content
-                ?: "https://blossom.nostr.build/${PlatformCrypto.sha256(ciphertext).toHex()}"
+            val resUrl = response.bodyAsText().trim()
+            if (resUrl.startsWith("http")) resUrl
+            else "https://blossom.nostr.build/$sha256Hex"
         } catch (_: Throwable) {
-            // Fallback deterministic content-addressed Blossom URL
-            "https://blossom.nostr.build/${PlatformCrypto.sha256(ciphertext).toHex()}"
+            "https://blossom.nostr.build/$sha256Hex"
         }
     }
 
     /**
-     * Upload public media (avatar/banner photo) to free Blossom host.
+     * Upload public media (avatar/banner photo) to free public host.
      */
     suspend fun uploadPublicMediaBlob(rawBytes: ByteArray, mimeType: String = "image/jpeg"): String {
         val sha256Hex = PlatformCrypto.sha256(rawBytes).toHex()
@@ -132,11 +130,12 @@ object BlossomMediaManager {
             else -> "jpg"
         }
         return try {
-            val response = client.post(PUBLIC_BLOSSOM_HOST) {
+            val response = client.post(PUBLIC_MEDIA_HOST) {
                 setBody(
                     MultiPartFormDataContent(
                         formData {
-                            append("file", rawBytes, Headers.build {
+                            append("reqtype", "fileupload")
+                            append("fileToUpload", rawBytes, Headers.build {
                                 append(HttpHeaders.ContentType, mimeType)
                                 append(HttpHeaders.ContentDisposition, "filename=\"media_$sha256Hex.$ext\"")
                             })
@@ -144,11 +143,9 @@ object BlossomMediaManager {
                     )
                 )
             }
-            val body = response.bodyAsText()
-            val parsed = json.parseToJsonElement(body).jsonObject
-            parsed["url"]?.jsonPrimitive?.content
-                ?: parsed["data"]?.jsonObject?.get("url")?.jsonPrimitive?.content
-                ?: "https://blossom.nostr.build/$sha256Hex.$ext"
+            val resUrl = response.bodyAsText().trim()
+            if (resUrl.startsWith("http")) resUrl
+            else "https://blossom.nostr.build/$sha256Hex.$ext"
         } catch (_: Throwable) {
             "https://blossom.nostr.build/$sha256Hex.$ext"
         }

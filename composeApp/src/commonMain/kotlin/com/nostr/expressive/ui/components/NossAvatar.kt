@@ -18,12 +18,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nostr.expressive.shared.media.ImageLoader
 import com.nostr.expressive.ui.picker.toImageBitmap
+import com.nostr.expressive.ui.theme.ExpressiveCookie9Shape
 
 @Composable
 fun NossAvatar(
@@ -31,6 +33,7 @@ fun NossAvatar(
     displayName: String,
     modifier: Modifier = Modifier,
     size: Dp = 44.dp,
+    shape: Shape = ExpressiveCookie9Shape,
     fallbackBg: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     textColor: Color = MaterialTheme.colorScheme.primary
 ) {
@@ -55,13 +58,13 @@ fun NossAvatar(
             contentScale = ContentScale.Crop,
             modifier = modifier
                 .size(size)
-                .clip(CircleShape)
+                .clip(shape)
         )
     } else {
         Box(
             modifier = modifier
                 .size(size)
-                .clip(CircleShape)
+                .clip(shape)
                 .background(fallbackBg),
             contentAlignment = Alignment.Center
         ) {

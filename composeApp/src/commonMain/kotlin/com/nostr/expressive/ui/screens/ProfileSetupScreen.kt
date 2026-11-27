@@ -53,6 +53,7 @@ import com.nostr.expressive.ui.components.CheckVectorIcon
 import com.nostr.expressive.ui.components.CrossVectorIcon
 import com.nostr.expressive.ui.picker.rememberImagePicker
 import com.nostr.expressive.ui.picker.toImageBitmap
+import com.nostr.expressive.ui.theme.ExpressiveCookie9Shape
 import com.nostr.expressive.ui.theme.FloatingPillShape
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -211,9 +212,9 @@ fun ProfileSetupScreen(
                                 .align(Alignment.BottomStart)
                                 .padding(start = 16.dp, bottom = 12.dp)
                                 .size(68.dp)
-                                .clip(CircleShape)
+                                .clip(ExpressiveCookie9Shape)
                                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                .border(3.dp, MaterialTheme.colorScheme.background, CircleShape)
+                                .border(3.dp, MaterialTheme.colorScheme.background, ExpressiveCookie9Shape)
                                 .clickable { avatarPicker() },
                             contentAlignment = Alignment.Center
                         ) {

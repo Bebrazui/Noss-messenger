@@ -73,7 +73,7 @@
     <string name="setup_skip_btn">Пропустить</string>
 
     <!-- Chat / Channel Detail -->
-    <string name="chat_message_hint">Зашифрованное сообщение...</string>
+    <string name="chat_message_hint">Сообщение...</string>
     <string name="channel_message_hint">Сообщение в канал...</string>
     <string name="empty_dialog">Диалог пуст. Отправьте первое сообщение.</string>
     <string name="btn_send">Отправить</string>

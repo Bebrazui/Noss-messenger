@@ -1,5 +1,6 @@
 package com.nostr.expressive.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,16 +21,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import nostr_expressive_messenger.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import com.nostr.expressive.shared.repository.ChatMessage
 import com.nostr.expressive.shared.repository.MessageDeliveryStatus
+import com.nostr.expressive.ui.picker.toImageBitmap
+import com.nostr.expressive.ui.theme.ExpressiveCookie9Shape
 import com.nostr.expressive.ui.theme.FloatingPillShape
 import com.nostr.expressive.ui.theme.InboundBubbleShape
 import com.nostr.expressive.ui.theme.OutboundBubbleShape
@@ -191,6 +202,23 @@ fun ExpressiveMessageBubble(
     }
 
     val mediaAttachment = com.nostr.expressive.shared.media.BlossomMediaManager.parseMediaAttachment(message.text)
+    var decryptedBitmap by remember(mediaAttachment?.url) { mutableStateOf<ImageBitmap?>(null) }
+
+    LaunchedEffect(mediaAttachment) {
+        if (mediaAttachment != null && mediaAttachment.url.isNotBlank()) {
+            val encBytes = com.nostr.expressive.shared.media.ImageLoader.loadImageBytes(mediaAttachment.url)
+            if (encBytes != null) {
+                try {
+                    val decBytes = com.nostr.expressive.shared.media.BlossomMediaManager.decryptMediaBytes(
+                        encBytes,
+                        mediaAttachment.keyHex,
+                        mediaAttachment.ivHex
+                    )
+                    decryptedBitmap = decBytes.toImageBitmap()
+                } catch (_: Exception) {}
+            }
+        }
+    }
 
     Row(
         modifier = modifier
@@ -207,42 +235,56 @@ fun ExpressiveMessageBubble(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
                 if (mediaAttachment != null) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.background.copy(alpha = 0.35f),
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    val currentDecrypted = decryptedBitmap
+                    if (currentDecrypted != null) {
+                        Image(
+                            bitmap = currentDecrypted,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 260.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                    } else {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.background.copy(alpha = 0.35f),
+                            modifier = Modifier.padding(bottom = 6.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Text(
-                                    text = "RAW",
-                                    fontSize = 10.sp,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Column {
-                                Text(
-                                    text = "Encrypted Media",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = textColor
-                                )
-                                Text(
-                                    text = "AES-GCM · ${mediaAttachment.mimeType} · ${mediaAttachment.sha256Hex.take(8)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontSize = 11.sp,
-                                    color = textColor.copy(alpha = 0.7f)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(ExpressiveCookie9Shape)
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "ENC",
+                                        fontSize = 10.sp,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "Фото / Файл (AES-GCM)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = textColor
+                                    )
+                                    Text(
+                                        text = "${mediaAttachment.mimeType} · ${mediaAttachment.sha256Hex.take(8)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontSize = 11.sp,
+                                        color = textColor.copy(alpha = 0.7f)
+                                    )
+                                }
                             }
                         }
                     }

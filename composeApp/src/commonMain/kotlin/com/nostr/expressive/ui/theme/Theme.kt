@@ -8,8 +8,17 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 // Deep Expressive Graphite Palette (0% blue parasitic tint)
 val ExpressiveSurface = Color(0xFF131314)
@@ -64,6 +73,62 @@ val OutboundBubbleShape = RoundedCornerShape(
 )
 
 val FloatingPillShape = RoundedCornerShape(50)
+
+/**
+ * Material 3 Expressive 9-Side-Cookie Shape (Scalloped 9-lobe shape).
+ * Standard M3 Expressive avatar geometry with 9 smooth, continuously curved lobes.
+ */
+val ExpressiveCookie9Shape: Shape = object : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Outline {
+        val path = Path()
+        val width = size.width
+        val height = size.height
+        val cx = width / 2f
+        val cy = height / 2f
+        val rOuter = minOf(width, height) / 2f
+        val rInner = rOuter * 0.86f // M3 Expressive scallop depth
+        val numLobes = 9
+        val numPoints = numLobes * 2
+        val dTheta = (2.0 * PI / numPoints).toFloat()
+
+        val pts = Array(numPoints) { i ->
+            val theta = i * dTheta - (PI / 2.0).toFloat()
+            val r = if (i % 2 == 0) rOuter else rInner
+            Triple(cx + r * cos(theta), cy + r * sin(theta), theta)
+        }
+
+        path.moveTo(pts[0].first, pts[0].second)
+
+        val rAvg = (rOuter + rInner) / 2f
+        val k = rAvg * dTheta * 0.36f
+
+        for (i in 0 until numPoints) {
+            val p1 = pts[i]
+            val p2 = pts[(i + 1) % numPoints]
+            val th1 = p1.third
+            val th2 = p2.third
+
+            val t1x = -sin(th1)
+            val t1y = cos(th1)
+            val t2x = -sin(th2)
+            val t2y = cos(th2)
+
+            val c1x = p1.first + t1x * k
+            val c1y = p1.second + t1y * k
+            val c2x = p2.first - t2x * k
+            val c2y = p2.second - t2y * k
+
+            path.cubicTo(c1x, c1y, c2x, c2y, p2.first, p2.second)
+        }
+        path.close()
+
+        return Outline.Generic(path)
+    }
+}
 
 @Composable
 fun NostrExpressiveTheme(

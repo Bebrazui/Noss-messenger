@@ -103,7 +103,9 @@ import com.nostr.expressive.ui.components.NossAvatar
 import com.nostr.expressive.ui.components.PlusIcon
 import com.nostr.expressive.ui.components.SearchIcon
 import com.nostr.expressive.ui.navigation.PlatformBackHandler
+import com.nostr.expressive.ui.picker.rememberImagePicker
 import com.nostr.expressive.ui.screens.ProfileSetupScreen
+import com.nostr.expressive.ui.theme.ExpressiveCookie9Shape
 import com.nostr.expressive.ui.theme.FloatingPillShape
 import com.nostr.expressive.ui.theme.InboundBubbleShape
 import com.nostr.expressive.ui.theme.NostrExpressiveTheme
@@ -607,6 +609,9 @@ fun MainAppContent(
                         val messages = allMessages[chatId] ?: emptyList()
                         val currentChat = chats.find { it.chatId == chatId || it.peerPubkey.equals(activeChatPubkey, ignoreCase = true) }
                         val displayTitle = currentChat?.peerDisplayName?.ifBlank { null } ?: activeChatTitle
+                        val chatImagePicker = rememberImagePicker { bytes, mime ->
+                            repository.sendMediaMessage(chatId, activeChatPubkey, bytes, mime)
+                        }
                         ChatDetailScreen(
                             title = displayTitle,
                             peerPubkey = activeChatPubkey,
@@ -617,8 +622,7 @@ fun MainAppContent(
                                 repository.sendMessage(chatId, activeChatPubkey, text)
                             },
                             onSendMedia = {
-                                val sampleImageBytes = "EXPRESSIVE_MEDIA_DEMO_BYTES_PNG_OR_WEBP".encodeToByteArray()
-                                repository.sendMediaMessage(chatId, activeChatPubkey, sampleImageBytes, "image/webp")
+                                chatImagePicker()
                             }
                         )
                     }
@@ -1441,14 +1445,7 @@ fun ChatDetailScreen(
                             size = 36.dp
                         )
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(title, style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                text = "Nostr • Защищено",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Text(title, style = MaterialTheme.typography.titleMedium)
                     }
                 },
                 navigationIcon = {
@@ -1714,14 +1711,14 @@ fun ProfileScreen(
             }
         }
 
-        // Avatar overlapping banner (clickable to edit) - enlarged to 112.dp
+        // Avatar overlapping banner (clickable to edit) - enlarged to 112.dp with M3 Expressive 9-side cookie shape
         Box(
             modifier = Modifier
                 .offset(y = (-56).dp)
                 .size(112.dp)
-                .clip(CircleShape)
+                .clip(ExpressiveCookie9Shape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .border(4.dp, MaterialTheme.colorScheme.background, CircleShape)
+                .border(3.dp, MaterialTheme.colorScheme.background, ExpressiveCookie9Shape)
                 .clickable { onEditClick() },
             contentAlignment = Alignment.Center
         ) {
