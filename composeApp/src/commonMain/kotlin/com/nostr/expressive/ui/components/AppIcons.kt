@@ -333,3 +333,47 @@ fun NostrLogo(
         }
     }
 }
+
+@Composable
+fun SettingsGearIcon(
+    modifier: Modifier = Modifier,
+    size: Dp = 22.dp,
+    tint: Color = LocalContentColor.current
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val cx = w / 2f
+        val cy = h / 2f
+        val strokeWidth = 2.0f.dp.toPx()
+        val rInner = w * 0.18f
+        val rOuter = w * 0.40f
+
+        // Center ring
+        drawCircle(
+            color = tint,
+            radius = rInner,
+            center = Offset(cx, cy),
+            style = Stroke(width = strokeWidth)
+        )
+
+        // 6 cog teeth
+        val numTeeth = 6
+        for (i in 0 until numTeeth) {
+            val angle = (i * 2.0 * kotlin.math.PI / numTeeth).toFloat()
+            val startR = w * 0.28f
+            val endR = rOuter
+            val sx = cx + startR * kotlin.math.cos(angle)
+            val sy = cy + startR * kotlin.math.sin(angle)
+            val ex = cx + endR * kotlin.math.cos(angle)
+            val ey = cy + endR * kotlin.math.sin(angle)
+            drawLine(
+                color = tint,
+                start = Offset(sx, sy),
+                end = Offset(ex, ey),
+                strokeWidth = strokeWidth * 1.5f,
+                cap = StrokeCap.Round
+            )
+        }
+    }
+}

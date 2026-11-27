@@ -74,6 +74,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
@@ -102,6 +103,7 @@ import com.nostr.expressive.ui.components.NostrLogo
 import com.nostr.expressive.ui.components.NossAvatar
 import com.nostr.expressive.ui.components.PlusIcon
 import com.nostr.expressive.ui.components.SearchIcon
+import com.nostr.expressive.ui.components.SettingsGearIcon
 import com.nostr.expressive.ui.navigation.PlatformBackHandler
 import com.nostr.expressive.ui.picker.rememberImagePicker
 import com.nostr.expressive.ui.screens.ProfileSetupScreen
@@ -1659,6 +1661,7 @@ fun ProfileScreen(
     var copied by remember { mutableStateOf(false) }
     var nsecCopied by remember { mutableStateOf(false) }
     var showNsec by remember { mutableStateOf(false) }
+    var showSettingsSheet by remember { mutableStateOf(false) }
     var showLogoutSafetySheet by remember { mutableStateOf(false) }
 
     val bannerBytes by repository.localBannerBytes.collectAsState()
@@ -1693,12 +1696,12 @@ fun ProfileScreen(
             .padding(bottom = 96.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Banner Header (clickable to edit)
+        // Banner Header with smooth bottom fade gradient & Settings button
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(140.dp)
-                .background(Color(0xFF1E2124))
+                .height(150.dp)
+                .background(MaterialTheme.colorScheme.surfaceContainerLowest)
                 .clickable { onEditClick() }
         ) {
             if (bannerBitmap != null) {
@@ -1707,6 +1710,49 @@ fun ProfileScreen(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    MaterialTheme.colorScheme.surfaceContainerLowest
+                                )
+                            )
+                        )
+                )
+            }
+
+            // Smooth gradient transition from banner to profile background
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to Color.Transparent,
+                            0.45f to Color.Transparent,
+                            0.82f to MaterialTheme.colorScheme.background.copy(alpha = 0.75f),
+                            1.0f to MaterialTheme.colorScheme.background
+                        )
+                    )
+            )
+
+            // Settings button in top-right of banner
+            IconButton(
+                onClick = { showSettingsSheet = true },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.35f))
+            ) {
+                SettingsGearIcon(
+                    size = 20.dp,
+                    tint = Color.White
                 )
             }
         }
@@ -1759,6 +1805,18 @@ fun ProfileScreen(
                 color = MaterialTheme.colorScheme.primary
             )
 
+            // Restored Bio directly below handle
+            if (about.isNotBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = about,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+
             Spacer(modifier = Modifier.height(18.dp))
 
             Button(
@@ -1772,12 +1830,9 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            val hasBio = about.isNotBlank()
-            val totalBlocks = if (hasBio) 3 else 2
-
             // 1. Public Key block (clickable to copy, shortened with ellipsis)
             Surface(
-                shape = getM3EConnectedShape(0, totalBlocks, cornerRadius = 18.dp, innerRadius = 4.dp),
+                shape = getM3EConnectedShape(0, 2, cornerRadius = 18.dp, innerRadius = 4.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1825,99 +1880,165 @@ fun ProfileScreen(
                 }
             }
 
-            // 2. Secret Key block (protected with Show/Hide toggle and copy)
+            // 2. Settings & Security block (opens Settings sheet)
             Surface(
-                shape = getM3EConnectedShape(1, totalBlocks, cornerRadius = 18.dp, innerRadius = 4.dp),
+                shape = getM3EConnectedShape(1, 2, cornerRadius = 18.dp, innerRadius = 4.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 1.5.dp)
+                    .clickable { showSettingsSheet = true }
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = stringResource(Res.string.profile_secret_key),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.Bold
+                        SettingsGearIcon(
+                            size = 20.dp,
+                            tint = MaterialTheme.colorScheme.primary
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (nsecCopied) {
-                                Text(
-                                    text = stringResource(Res.string.profile_copied),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(end = 8.dp)
-                                )
-                            }
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(Res.string.profile_settings_btn),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(Res.string.profile_settings_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Settings & Security Modal Bottom Sheet (contains Secret Key & Logout)
+    ExpressiveModalBottomSheet(
+        visible = showSettingsSheet,
+        onDismissRequest = { showSettingsSheet = false }
+    ) {
+        Box(
+            modifier = Modifier
+                .width(36.dp)
+                .height(4.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = stringResource(Res.string.profile_settings_btn),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Secret Key block (protected with Show/Hide toggle and copy)
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(Res.string.profile_secret_key),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (nsecCopied) {
                             Text(
-                                text = if (showNsec) stringResource(Res.string.profile_hide_key) else stringResource(Res.string.profile_show_key),
+                                text = stringResource(Res.string.profile_copied),
                                 color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier
-                                    .clickable { showNsec = !showNsec }
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(end = 8.dp)
                             )
                         }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (showNsec) "${nsec.take(12)}...${nsec.takeLast(8)}" else "••••••••••••••••••••",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    if (showNsec) {
-                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Нажмите, чтобы скопировать nsec",
-                            style = MaterialTheme.typography.labelSmall,
+                            text = if (showNsec) stringResource(Res.string.profile_hide_key) else stringResource(Res.string.profile_show_key),
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable {
-                                clipboardManager.setText(AnnotatedString(nsec))
-                                nsecCopied = true
-                            }
-                        )
-                    }
-                }
-            }
-
-            // 3. Bio block (if present)
-            if (hasBio) {
-                Surface(
-                    shape = getM3EConnectedShape(2, totalBlocks, cornerRadius = 18.dp, innerRadius = 4.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = stringResource(Res.string.profile_bio),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable { showNsec = !showNsec }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(about, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (showNsec) "${nsec.take(12)}...${nsec.takeLast(8)}" else "••••••••••••••••••••",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (showNsec) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Нажмите, чтобы скопировать nsec",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable {
+                            clipboardManager.setText(AnnotatedString(nsec))
+                            nsecCopied = true
+                        }
+                    )
+                }
             }
-
-            Spacer(modifier = Modifier.height(36.dp))
-
-            // Safe subtle logout link (not an accidental primary red button!)
-            Text(
-                text = stringResource(Res.string.profile_logout_link),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { showLogoutSafetySheet = true }
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            )
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Logout inside Settings
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    showSettingsSheet = false
+                    showLogoutSafetySheet = true
+                }
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = stringResource(Res.string.profile_logout_link),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
     }
 
     // Safety Confirmation Bottom Sheet for Logout
