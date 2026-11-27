@@ -20,6 +20,7 @@ import androidx.compose.ui.text.AnnotatedString
 import nostr_expressive_messenger.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import com.nostr.expressive.ui.picker.toImageBitmap
+import com.nostr.expressive.shared.crypto.Nip19
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -135,6 +136,7 @@ fun App() {
     NostrExpressiveTheme {
         var currentIdentity by remember { mutableStateOf(KeyManager.getSavedIdentity()) }
         var pendingNewIdentity by remember { mutableStateOf<NostrIdentity?>(null) }
+        var isImportedSession by remember { mutableStateOf(false) }
 
         if (pendingNewIdentity != null) {
             KeyBackupScreen(
@@ -149,6 +151,7 @@ fun App() {
                 if (isNew) {
                     pendingNewIdentity = identity
                 } else {
+                    isImportedSession = true
                     currentIdentity = identity
                 }
             })
@@ -164,9 +167,17 @@ fun App() {
                     dbKey = dbKey
                 )
             }
+
+            LaunchedEffect(isImportedSession) {
+                if (isImportedSession) {
+                    repository.markProfileConfigured()
+                    isImportedSession = false
+                }
+            }
+
             val isProfileConfigured by repository.isProfileConfigured.collectAsState()
 
-            if (!isProfileConfigured) {
+            if (!isProfileConfigured && !isImportedSession) {
                 ProfileSetupScreen(
                     repository = repository,
                     onComplete = {
@@ -180,6 +191,7 @@ fun App() {
                     onLogout = {
                         KeyManager.clearIdentity()
                         currentIdentity = null
+                        isImportedSession = false
                     }
                 )
             }
@@ -773,6 +785,7 @@ fun MainAppContent(
         }
 
         NewChatSheet(
+            repository = repository,
             visible = showNewChatDialog,
             onDismiss = { showNewChatDialog = false },
             onConfirm = { npubInput, nameInput ->
@@ -854,12 +867,40 @@ fun ExpressiveModalBottomSheet(
 
 @Composable
 fun NewChatSheet(
+    repository: MessengerRepository,
     visible: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (String, String) -> Unit
 ) {
     var npub by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
+    val communityUsers by repository.communityUsers.collectAsState()
+
+    val cleanInput = npub.trim()
+    val resolvedHex = remember(cleanInput) {
+        if (cleanInput.startsWith("npub1")) {
+            try { Nip19.parseNpub(cleanInput).lowercase() } catch (_: Exception) { null }
+        } else if (cleanInput.length == 64 && cleanInput.all { it in "0123456789abcdefABCDEF" }) {
+            cleanInput.lowercase()
+        } else null
+    }
+
+    LaunchedEffect(resolvedHex) {
+        if (resolvedHex != null) {
+            repository.fetchUserProfile(resolvedHex)
+        }
+    }
+
+    val matchedUser = remember(resolvedHex, communityUsers) {
+        if (resolvedHex == null) null
+        else communityUsers.find { it.pubkeyHex.equals(resolvedHex, ignoreCase = true) }
+    }
+
+    LaunchedEffect(matchedUser) {
+        if (matchedUser != null && name.isBlank()) {
+            name = matchedUser.displayName.ifBlank { matchedUser.name }
+        }
+    }
 
     ExpressiveModalBottomSheet(
         visible = visible,
@@ -899,6 +940,39 @@ fun NewChatSheet(
             )
         )
 
+        if (matchedUser != null) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    NossAvatar(
+                        avatarUrl = matchedUser.picture,
+                        displayName = matchedUser.displayName.ifBlank { matchedUser.name },
+                        size = 40.dp
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = matchedUser.displayName.ifBlank { matchedUser.name },
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "@${matchedUser.name}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(10.dp))
 
         OutlinedTextField(
@@ -931,11 +1005,18 @@ fun NewChatSheet(
 
             Button(
                 onClick = {
-                    if (npub.isNotBlank()) {
-                        onConfirm(npub, name)
+                    if (cleanInput.isNotBlank()) {
+                        val finalName = name.trim().ifBlank {
+                            matchedUser?.displayName?.ifBlank { null }
+                                ?: matchedUser?.name?.ifBlank { null }
+                                ?: "User ${resolvedHex?.take(6) ?: cleanInput.takeLast(6)}"
+                        }
+                        onConfirm(cleanInput, finalName)
+                        npub = ""
+                        name = ""
                     }
                 },
-                enabled = npub.isNotBlank(),
+                enabled = cleanInput.isNotBlank(),
                 shape = FloatingPillShape,
                 modifier = Modifier.weight(2f).height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -2215,12 +2296,20 @@ fun ProfileScreen(
             )
 
             // Bio directly below handle (shown once)
+            Spacer(modifier = Modifier.height(10.dp))
             if (about.isNotBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = about,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+            } else {
+                Text(
+                    text = "Нет описания профиля",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 20.dp)
                 )

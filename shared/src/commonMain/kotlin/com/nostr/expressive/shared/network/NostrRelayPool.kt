@@ -29,11 +29,12 @@ import kotlinx.serialization.json.jsonPrimitive
 
 class NostrRelayPool(
     private val relayUrls: List<String> = listOf(
-        "wss://nos.lol",
+        "wss://relay.nostr.band",
         "wss://relay.damus.io",
+        "wss://nos.lol",
         "wss://relay.primal.net",
-        "wss://search.nos.today",
-        "wss://relay.snort.social"
+        "wss://nostr.mom",
+        "wss://relay.current.fyi"
     )
 ) {
     private val client = HttpClient {

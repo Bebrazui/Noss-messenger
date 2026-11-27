@@ -226,7 +226,8 @@ class MessengerRepository(
         relayPool.subscribe("sub_public_channels", listOf(NostrKinds.CHANNEL_CREATE))
         relayPool.subscribe("sub_metadata", listOf(NostrKinds.METADATA), limit = 50)
 
-        // Request live profile metadata for all existing chats from relays
+        // Request live profile metadata for all existing chats and own profile from relays
+        fetchUserProfile(myPubkey)
         savedChats.forEach { chat ->
             fetchUserProfile(chat.peerPubkey)
         }
@@ -341,8 +342,11 @@ class MessengerRepository(
             }
         }
 
-        // Wait briefly for network probe responses
-        delay(1200L)
+        // Wait for network probe responses (stop early once takenBy found)
+        val startTime = PlatformCrypto.currentTimeSeconds()
+        while (takenBy == null && (PlatformCrypto.currentTimeSeconds() - startTime) < 2) {
+            delay(100L)
+        }
         probeJob.cancel()
         relayPool.unsubscribe(probeSubId)
 
@@ -568,6 +572,11 @@ class MessengerRepository(
         _chats.value = updated
     }
 
+    fun markProfileConfigured() {
+        _isProfileConfigured.value = true
+        localDb.saveUserProfile(_userProfile.value, isConfigured = true)
+    }
+
     private fun handleIncomingEvent(event: com.nostr.expressive.shared.model.NostrEvent) {
         when (event.kind) {
             NostrKinds.METADATA -> {
@@ -576,25 +585,51 @@ class MessengerRepository(
                     val meta = Nip01Profile.parseMetadata(event.content)
                     val senderHex = event.pubkey.lowercase()
                     meta.name?.trim()?.lowercase()?.let { knownUsernames[it] = senderHex }
+                    val rawName = meta.name?.trim() ?: ""
+                    val rawDisplayName = meta.display_name?.trim() ?: ""
+                    val isMeaningfulProfile = rawName.isNotBlank() || rawDisplayName.isNotBlank()
+
                     val newDisplayName = meta.display_name?.ifBlank { null }
                         ?: meta.name?.ifBlank { null }
                         ?: "User ${senderHex.take(6)}"
                     val newAvatar = meta.picture?.ifBlank { null }
 
-                    val nossUser = NossUser(
-                        pubkeyHex = senderHex,
-                        npub = com.nostr.expressive.shared.crypto.Nip19.toNpub(senderHex),
-                        name = meta.name ?: "user",
-                        displayName = newDisplayName,
-                        about = meta.about ?: "",
-                        picture = newAvatar
-                    )
-                    _communityUsers.value = (_communityUsers.value.filter { !it.pubkeyHex.equals(senderHex, ignoreCase = true) } + nossUser)
+                    // If incoming metadata is our own profile, update local profile state
+                    if (senderHex == myPubkey.lowercase()) {
+                        val current = _userProfile.value
+                        val updated = current.copy(
+                            name = meta.name?.ifBlank { null } ?: current.name,
+                            displayName = meta.display_name?.ifBlank { null } ?: meta.name?.ifBlank { null } ?: current.displayName,
+                            about = meta.about ?: current.about,
+                            picture = newAvatar ?: current.picture,
+                            banner = meta.banner?.ifBlank { null } ?: current.banner,
+                            nip05 = meta.nip05 ?: current.nip05,
+                            lud16 = meta.lud16 ?: current.lud16
+                        )
+                        _userProfile.value = updated
+                        localDb.saveUserProfile(updated, isConfigured = true)
+                        _isProfileConfigured.value = true
+                    }
+
+                    // Only add meaningful registered profiles to community users list to prevent random anonymous junk
+                    if (isMeaningfulProfile || senderHex == myPubkey.lowercase()) {
+                        val nossUser = NossUser(
+                            pubkeyHex = senderHex,
+                            npub = com.nostr.expressive.shared.crypto.Nip19.toNpub(senderHex),
+                            name = meta.name ?: "user",
+                            displayName = newDisplayName,
+                            about = meta.about ?: "",
+                            picture = newAvatar
+                        )
+                        _communityUsers.value = (_communityUsers.value.filter { !it.pubkeyHex.equals(senderHex, ignoreCase = true) } + nossUser)
+                    }
+
                     val chatId = "chat_${senderHex.take(12)}"
                     val existingChat = _chats.value.find { it.chatId == chatId || it.peerPubkey.equals(senderHex, ignoreCase = true) }
                     if (existingChat != null) {
+                        val shouldUpdateName = existingChat.peerDisplayName.startsWith("User ") || existingChat.peerDisplayName == "user" || isMeaningfulProfile
                         val updated = existingChat.copy(
-                            peerDisplayName = newDisplayName,
+                            peerDisplayName = if (shouldUpdateName) newDisplayName else existingChat.peerDisplayName,
                             peerAvatarUrl = newAvatar ?: existingChat.peerAvatarUrl
                         )
                         localDb.saveChat(updated)
