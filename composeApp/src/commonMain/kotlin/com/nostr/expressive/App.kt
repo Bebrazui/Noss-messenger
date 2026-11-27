@@ -103,8 +103,13 @@ import com.nostr.expressive.ui.components.ArrowBackIcon
 import com.nostr.expressive.ui.components.CameraVectorIcon
 import com.nostr.expressive.ui.components.CheckVectorIcon
 import com.nostr.expressive.ui.components.CrossVectorIcon
+import com.nostr.expressive.ui.components.BouncySpringSwipeChat
+import com.nostr.expressive.ui.components.BouncySpringSwipeMessage
+import com.nostr.expressive.ui.components.ExpressiveChatContextCard
+import com.nostr.expressive.ui.components.ExpressiveConfirmDialog
 import com.nostr.expressive.ui.components.ExpressiveFloatingToolbar
 import com.nostr.expressive.ui.components.ExpressiveMessageBubble
+import com.nostr.expressive.ui.components.ExpressiveMessageFloatingMenu
 import com.nostr.expressive.ui.components.ExpressiveSplitButton
 import com.nostr.expressive.ui.components.NostrLogo
 import com.nostr.expressive.ui.components.NossAvatar
@@ -863,12 +868,22 @@ fun NewChatSheet(
     val communityUsers by repository.communityUsers.collectAsState()
 
     val cleanInput = npub.trim()
-    val resolvedHex = remember(cleanInput) {
-        if (cleanInput.startsWith("npub1")) {
+    val resolvedHex = remember(cleanInput, communityUsers) {
+        val handle = cleanInput.removePrefix("@").lowercase()
+        val userByHandle = communityUsers.find { it.name.lowercase() == handle }
+        if (userByHandle != null) {
+            userByHandle.pubkeyHex
+        } else if (cleanInput.startsWith("npub1")) {
             try { Nip19.parseNpub(cleanInput).lowercase() } catch (_: Exception) { null }
         } else if (cleanInput.length == 64 && cleanInput.all { it in "0123456789abcdefABCDEF" }) {
             cleanInput.lowercase()
         } else null
+    }
+
+    LaunchedEffect(cleanInput) {
+        if (cleanInput.isNotBlank()) {
+            repository.searchNossUsers(cleanInput)
+        }
     }
 
     LaunchedEffect(resolvedHex) {
@@ -1334,12 +1349,20 @@ fun ChatListScreen(
                         )
                     }
                     itemsIndexed(filteredChats) { index, chat ->
-                        ChatListItem(
+                        BouncySpringSwipeChat(
                             chat = chat,
-                            shape = getM3EConnectedShape(index, filteredChats.size),
                             onClick = { onChatClick(chat) },
-                            onLongClick = { selectedChatForActions = chat }
-                        )
+                            onClearChat = { onClearChat(chat) },
+                            onDeleteChat = { onDeleteChat(chat) },
+                            onLongPress = { selectedChatForActions = chat }
+                        ) {
+                            ChatListItem(
+                                chat = chat,
+                                shape = getM3EConnectedShape(index, filteredChats.size),
+                                onClick = { onChatClick(chat) },
+                                onLongClick = { selectedChatForActions = chat }
+                            )
+                        }
                     }
                 }
 
@@ -1395,90 +1418,39 @@ fun ChatListScreen(
                     }
                 } else {
                     itemsIndexed(filteredChats) { index, chat ->
-                        ChatListItem(
+                        BouncySpringSwipeChat(
                             chat = chat,
-                            shape = getM3EConnectedShape(index, filteredChats.size),
                             onClick = { onChatClick(chat) },
-                            onLongClick = { selectedChatForActions = chat }
-                        )
+                            onClearChat = { onClearChat(chat) },
+                            onDeleteChat = { onDeleteChat(chat) },
+                            onLongPress = { selectedChatForActions = chat }
+                        ) {
+                            ChatListItem(
+                                chat = chat,
+                                shape = getM3EConnectedShape(index, filteredChats.size),
+                                onClick = { onChatClick(chat) },
+                                onLongClick = { selectedChatForActions = chat }
+                            )
+                        }
                     }
                 }
             }
         }
     }
 
-    ExpressiveModalBottomSheet(
+    ExpressiveChatContextCard(
         visible = selectedChatForActions != null,
-        onDismissRequest = { selectedChatForActions = null }
-    ) {
-        selectedChatForActions?.let { chat ->
-            Box(
-                modifier = Modifier
-                    .width(36.dp)
-                    .height(4.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                NossAvatar(
-                    avatarUrl = chat.peerAvatarUrl,
-                    displayName = chat.peerDisplayName,
-                    size = 40.dp
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(chat.peerDisplayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Диалог", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        onClearChat(chat)
-                        selectedChatForActions = null
-                    },
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(stringResource(Res.string.chat_menu_clear), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        onDeleteChat(chat)
-                        selectedChatForActions = null
-                    },
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(stringResource(Res.string.chat_menu_delete), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
+        chat = selectedChatForActions,
+        onDismiss = { selectedChatForActions = null },
+        onClearChat = {
+            selectedChatForActions?.let { onClearChat(it) }
+            selectedChatForActions = null
+        },
+        onDeleteChat = {
+            selectedChatForActions?.let { onDeleteChat(it) }
+            selectedChatForActions = null
         }
-    }
+    )
 }
 
 @Composable
@@ -1720,16 +1692,14 @@ fun ChatDetailScreen(
             contentPadding = PaddingValues(vertical = 12.dp)
         ) {
             items(messages) { msg ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .pointerInput(msg.id) {
-                            detectTapGestures(
-                                onLongPress = {
-                                    selectedMessageForAction = msg
-                                }
-                            )
+                BouncySpringSwipeMessage(
+                    message = msg,
+                    onLongPress = { selectedMessageForAction = msg },
+                    onQuickAction = {
+                        if (!msg.text.startsWith("nostr:media:")) {
+                            clipboardManager.setText(AnnotatedString(msg.text))
                         }
+                    }
                 ) {
                     ExpressiveMessageBubble(message = msg)
                 }
@@ -1817,200 +1787,50 @@ fun ChatDetailScreen(
         Spacer(modifier = Modifier.height(24.dp))
     }
 
-    // Message Actions Sheet (Copy, Delete)
-    ExpressiveModalBottomSheet(
+    // M3 Expressive Floating Message Context Menu (replacing generic bottom sheet)
+    ExpressiveMessageFloatingMenu(
         visible = selectedMessageForAction != null,
-        onDismissRequest = { selectedMessageForAction = null }
-    ) {
-        selectedMessageForAction?.let { msg ->
-            Box(
-                modifier = Modifier
-                    .width(36.dp)
-                    .height(4.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            val preview = if (msg.text.startsWith("nostr:media:")) "📷 Файл" else msg.text
-            Text(
-                text = preview.take(120),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 3
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (!msg.text.startsWith("nostr:media:")) {
-                            clipboardManager.setText(AnnotatedString(msg.text))
-                        }
-                        selectedMessageForAction = null
-                    },
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(Res.string.chat_menu_copy_msg),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+        message = selectedMessageForAction,
+        onDismiss = { selectedMessageForAction = null },
+        onCopy = {
+            selectedMessageForAction?.let { msg ->
+                if (!msg.text.startsWith("nostr:media:")) {
+                    clipboardManager.setText(AnnotatedString(msg.text))
                 }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        onDeleteMessage(msg.id)
-                        selectedMessageForAction = null
-                    },
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = stringResource(Res.string.chat_menu_delete_msg),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
+        },
+        onDelete = {
+            selectedMessageForAction?.let { msg ->
+                onDeleteMessage(msg.id)
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
+        },
+        onReply = {
+            selectedMessageForAction?.let { msg ->
+                inputText = "↩️ " + msg.text.take(30) + "... "
+            }
         }
-    }
+    )
 
-    // Confirmation Sheet: Clear History
-    ExpressiveModalBottomSheet(
+    // M3 Expressive Centered Confirmation Dialogs (replacing generic bottom sheets)
+    ExpressiveConfirmDialog(
         visible = showClearConfirm,
-        onDismissRequest = { showClearConfirm = false }
-    ) {
-        Box(
-            modifier = Modifier
-                .width(36.dp)
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        title = stringResource(Res.string.chat_clear_confirm_title),
+        message = stringResource(Res.string.chat_clear_confirm_desc),
+        confirmText = stringResource(Res.string.chat_menu_clear),
+        isDestructive = false,
+        onConfirm = onClearChat,
+        onDismiss = { showClearConfirm = false }
+    )
 
-        Text(
-            text = stringResource(Res.string.chat_clear_confirm_title),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = stringResource(Res.string.chat_clear_confirm_desc),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Button(
-                onClick = { showClearConfirm = false },
-                modifier = Modifier.weight(1f).height(48.dp),
-                shape = FloatingPillShape,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-            ) {
-                Text(stringResource(Res.string.btn_cancel), color = MaterialTheme.colorScheme.onSurface)
-            }
-            Button(
-                onClick = {
-                    showClearConfirm = false
-                    onClearChat()
-                },
-                modifier = Modifier.weight(1f).height(48.dp),
-                shape = FloatingPillShape,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-            ) {
-                Text(stringResource(Res.string.chat_menu_clear), color = MaterialTheme.colorScheme.onError)
-            }
-        }
-        Spacer(modifier = Modifier.height(20.dp))
-    }
-
-    // Confirmation Sheet: Delete Chat
-    ExpressiveModalBottomSheet(
+    ExpressiveConfirmDialog(
         visible = showDeleteConfirm,
-        onDismissRequest = { showDeleteConfirm = false }
-    ) {
-        Box(
-            modifier = Modifier
-                .width(36.dp)
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = stringResource(Res.string.chat_delete_confirm_title),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.error
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = stringResource(Res.string.chat_delete_confirm_desc),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Button(
-                onClick = { showDeleteConfirm = false },
-                modifier = Modifier.weight(1f).height(48.dp),
-                shape = FloatingPillShape,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-            ) {
-                Text(stringResource(Res.string.btn_cancel), color = MaterialTheme.colorScheme.onSurface)
-            }
-            Button(
-                onClick = {
-                    showDeleteConfirm = false
-                    onDeleteChat()
-                },
-                modifier = Modifier.weight(1f).height(48.dp),
-                shape = FloatingPillShape,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-            ) {
-                Text(stringResource(Res.string.chat_menu_delete), color = MaterialTheme.colorScheme.onError)
-            }
-        }
-        Spacer(modifier = Modifier.height(20.dp))
-    }
+        title = stringResource(Res.string.chat_delete_confirm_title),
+        message = stringResource(Res.string.chat_delete_confirm_desc),
+        confirmText = stringResource(Res.string.chat_menu_delete),
+        isDestructive = true,
+        onConfirm = onDeleteChat,
+        onDismiss = { showDeleteConfirm = false }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -117,7 +117,7 @@ class MessengerRepository(
 
     private val knownUsernames = mutableMapOf<String, String>() // lowercase name -> pubkeyHex
 
-    private val _communityUsers = MutableStateFlow<List<NossUser>>(emptyList())
+    private val _communityUsers = MutableStateFlow<List<NossUser>>(localDb.getCommunityUsers())
     val communityUsers: StateFlow<List<NossUser>> = _communityUsers.asStateFlow()
 
     fun searchNossUsers(query: String): List<NossUser> {
@@ -143,14 +143,22 @@ class MessengerRepository(
                 about = "Nostr User"
             )
             if (_communityUsers.value.none { it.pubkeyHex.equals(pubkeyHex, ignoreCase = true) }) {
-                _communityUsers.value = _communityUsers.value + placeholder
+                val updated = _communityUsers.value + placeholder
+                _communityUsers.value = updated
+                localDb.saveCommunityUsers(updated)
             }
             return listOf(placeholder)
         }
 
-        // Trigger NIP-50 search on relays
+        // Query relays via hashtag #t (supported by standard relays) AND full-text search (supported by NIP-50 search relays)
         val searchSubId = "search_${clean.take(8)}"
-        relayPool.subscribe(searchSubId, listOf(NostrKinds.METADATA), search = clean, limit = 20)
+        relayPool.subscribe(
+            subId = searchSubId,
+            kinds = listOf(NostrKinds.METADATA),
+            tTags = listOf(clean, "noss", "noss_user"),
+            search = clean,
+            limit = 30
+        )
 
         return _communityUsers.value.filter { user ->
             user.name.lowercase().contains(clean) ||
@@ -225,6 +233,12 @@ class MessengerRepository(
         relayPool.subscribe("sub_inbox", listOf(NostrKinds.GIFT_WRAP), pTags = listOf(myPubkey))
         relayPool.subscribe("sub_public_channels", listOf(NostrKinds.CHANNEL_CREATE))
         relayPool.subscribe("sub_metadata", listOf(NostrKinds.METADATA), limit = 50)
+        relayPool.subscribe("sub_noss_users", listOf(NostrKinds.METADATA), tTags = listOf("noss", "noss_user"), limit = 100)
+
+        // Populate known usernames from persisted community users
+        localDb.getCommunityUsers().forEach { user ->
+            if (user.name.isNotBlank()) knownUsernames[user.name.trim().lowercase()] = user.pubkeyHex
+        }
 
         // Request live profile metadata for all existing chats and own profile from relays
         fetchUserProfile(myPubkey)
@@ -315,11 +329,12 @@ class MessengerRepository(
             return UsernameCheckResult.Taken(clean, cachedOwner)
         }
 
-        // Probe relays with search filter for this username
+        // Probe relays with search filter and hashtag tag for this username
         val probeSubId = "probe_user_${PlatformCrypto.randomBytes(4).toHex()}"
         relayPool.subscribe(
             subId = probeSubId,
             kinds = listOf(NostrKinds.METADATA),
+            tTags = listOf(clean, "noss"),
             search = clean,
             limit = 20
         )
@@ -621,7 +636,9 @@ class MessengerRepository(
                             about = meta.about ?: "",
                             picture = newAvatar
                         )
-                        _communityUsers.value = (_communityUsers.value.filter { !it.pubkeyHex.equals(senderHex, ignoreCase = true) } + nossUser)
+                        val updatedList = (_communityUsers.value.filter { !it.pubkeyHex.equals(senderHex, ignoreCase = true) } + nossUser)
+                        _communityUsers.value = updatedList
+                        localDb.saveCommunityUsers(updatedList)
                     }
 
                     val chatId = "chat_${senderHex.take(12)}"

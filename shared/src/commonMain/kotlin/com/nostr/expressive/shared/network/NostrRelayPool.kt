@@ -156,6 +156,8 @@ class NostrRelayPool(
         kinds: List<Int>,
         pTags: List<String> = emptyList(),
         eTags: List<String> = emptyList(),
+        tTags: List<String> = emptyList(),
+        dTags: List<String> = emptyList(),
         authors: List<String> = emptyList(),
         search: String? = null,
         limit: Int? = null
@@ -172,6 +174,12 @@ class NostrRelayPool(
             }
             if (eTags.isNotEmpty()) {
                 filterMap["#e"] = JsonArray(eTags.map { JsonPrimitive(it.lowercase()) })
+            }
+            if (tTags.isNotEmpty()) {
+                filterMap["#t"] = JsonArray(tTags.map { JsonPrimitive(it.lowercase()) })
+            }
+            if (dTags.isNotEmpty()) {
+                filterMap["#d"] = JsonArray(dTags.map { JsonPrimitive(it.lowercase()) })
             }
             if (!search.isNullOrBlank()) {
                 filterMap["search"] = JsonPrimitive(search)

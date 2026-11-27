@@ -29,12 +29,30 @@ object Nip01Profile {
         val content = json.encodeToString(metadata)
         val now = PlatformCrypto.currentTimeSeconds()
 
+        val cleanName = (metadata.name ?: "").trim().lowercase()
+        val tags = mutableListOf<List<String>>(
+            listOf("t", "noss"),
+            listOf("t", "noss_user")
+        )
+        if (cleanName.isNotBlank()) {
+            tags.add(listOf("t", cleanName))
+            tags.add(listOf("d", cleanName))
+            tags.add(listOf("name", cleanName))
+        }
+        val cleanDisplayName = (metadata.display_name ?: "").trim().lowercase()
+        if (cleanDisplayName.isNotBlank() && cleanDisplayName != cleanName) {
+            tags.add(listOf("t", cleanDisplayName))
+        }
+        if (myPubkey.isNotBlank()) {
+            tags.add(listOf("p", myPubkey.lowercase()))
+        }
+
         return if (privkeyHex.isNotBlank()) {
             NostrEvent.createAndSign(
                 privkeyHex = privkeyHex,
                 kind = NostrKinds.METADATA,
                 content = content,
-                tags = emptyList(),
+                tags = tags,
                 createdAt = now
             )
         } else {
@@ -42,7 +60,7 @@ object Nip01Profile {
                 pubkey = myPubkey,
                 created_at = now,
                 kind = NostrKinds.METADATA,
-                tags = emptyList(),
+                tags = tags,
                 content = content,
                 sig = ""
             )

@@ -20,7 +20,8 @@ data class DatabaseState(
     val isProfileConfigured: Boolean = false,
     val lastSyncTimestamp: Long = 0L,
     val avatarBytesHex: String? = null,
-    val bannerBytesHex: String? = null
+    val bannerBytesHex: String? = null,
+    val communityUsers: List<com.nostr.expressive.shared.repository.NossUser> = emptyList()
 )
 
 class LocalDatabase(
@@ -159,6 +160,14 @@ class LocalDatabase(
 
     fun saveUserProfile(profile: com.nostr.expressive.shared.repository.UserProfile, isConfigured: Boolean = true) {
         state = state.copy(userProfile = profile, isProfileConfigured = isConfigured)
+        persist()
+    }
+
+    fun getCommunityUsers(): List<com.nostr.expressive.shared.repository.NossUser> = state.communityUsers
+
+    fun saveCommunityUsers(users: List<com.nostr.expressive.shared.repository.NossUser>) {
+        val merged = (users + state.communityUsers).distinctBy { it.pubkeyHex.lowercase() }
+        state = state.copy(communityUsers = merged)
         persist()
     }
 
