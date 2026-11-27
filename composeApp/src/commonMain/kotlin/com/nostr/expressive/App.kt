@@ -119,6 +119,7 @@ enum class Screen {
     PROFILE_SETUP,
     CHATS,
     PROFILE,
+    SETTINGS,
     CHAT_DETAIL,
     CHANNEL_DETAIL
 }
@@ -519,11 +520,15 @@ fun MainAppContent(
     val allChannelMessages by repository.channelMessages.collectAsState()
     val profile by repository.userProfile.collectAsState()
 
-    val isDetailView = currentScreen == Screen.CHAT_DETAIL || currentScreen == Screen.CHANNEL_DETAIL || currentScreen == Screen.PROFILE_SETUP
+    val isDetailView = currentScreen == Screen.CHAT_DETAIL || currentScreen == Screen.CHANNEL_DETAIL || currentScreen == Screen.PROFILE_SETUP || currentScreen == Screen.SETTINGS
 
     // Hardware back gesture handling for Android
     PlatformBackHandler(enabled = isDetailView) {
-        currentScreen = if (currentScreen == Screen.PROFILE_SETUP) Screen.PROFILE else Screen.CHATS
+        currentScreen = when (currentScreen) {
+            Screen.PROFILE_SETUP -> Screen.PROFILE
+            Screen.SETTINGS -> Screen.PROFILE
+            else -> Screen.CHATS
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -532,10 +537,11 @@ fun MainAppContent(
             targetState = currentScreen,
             transitionSpec = {
                 // Direction model:
-                // 1. Drill-down forward (into chat, channel, setup): right-to-left
+                // 1. Drill-down forward (into chat, channel, setup, settings): right-to-left
                 val isDrillDown = targetState == Screen.CHAT_DETAIL ||
                                   targetState == Screen.CHANNEL_DETAIL ||
-                                  targetState == Screen.PROFILE_SETUP
+                                  targetState == Screen.PROFILE_SETUP ||
+                                  targetState == Screen.SETTINGS
 
                 // 2. Tab switch rightwards (Chats [left] -> Profile [right]): right-to-left
                 val isTabRight = initialState == Screen.CHATS && targetState == Screen.PROFILE
@@ -589,13 +595,21 @@ fun MainAppContent(
                     ProfileScreen(
                         repository = repository,
                         npub = identity.npub,
-                        nsec = identity.nsec,
                         displayName = profile.displayName,
                         name = profile.name,
                         about = profile.about,
                         picture = profile.picture,
                         banner = profile.banner,
                         onEditClick = { currentScreen = Screen.PROFILE_SETUP },
+                        onSettingsClick = { currentScreen = Screen.SETTINGS }
+                    )
+                }
+                Screen.SETTINGS -> {
+                    SettingsScreen(
+                        repository = repository,
+                        npub = identity.npub,
+                        nsec = identity.nsec,
+                        onBack = { currentScreen = Screen.PROFILE },
                         onLogout = onLogout
                     )
                 }
@@ -1648,21 +1662,16 @@ fun ChannelMessageItem(msg: ChatMessage) {
 fun ProfileScreen(
     repository: MessengerRepository,
     npub: String,
-    nsec: String,
     displayName: String,
     name: String,
     about: String,
     picture: String? = null,
     banner: String? = null,
     onEditClick: () -> Unit,
-    onLogout: () -> Unit
+    onSettingsClick: () -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
-    var nsecCopied by remember { mutableStateOf(false) }
-    var showNsec by remember { mutableStateOf(false) }
-    var showSettingsSheet by remember { mutableStateOf(false) }
-    var showLogoutSafetySheet by remember { mutableStateOf(false) }
 
     val bannerBytes by repository.localBannerBytes.collectAsState()
     val avatarBytes by repository.localAvatarBytes.collectAsState()
@@ -1673,13 +1682,6 @@ fun ProfileScreen(
         if (copied) {
             delay(2000L)
             copied = false
-        }
-    }
-
-    LaunchedEffect(nsecCopied) {
-        if (nsecCopied) {
-            delay(2000L)
-            nsecCopied = false
         }
     }
 
@@ -1742,7 +1744,7 @@ fun ProfileScreen(
 
             // Settings button in top-right of banner
             IconButton(
-                onClick = { showSettingsSheet = true },
+                onClick = onSettingsClick,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(12.dp)
@@ -1805,7 +1807,7 @@ fun ProfileScreen(
                 color = MaterialTheme.colorScheme.primary
             )
 
-            // Restored Bio directly below handle
+            // Bio directly below handle if present
             if (about.isNotBlank()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
@@ -1830,9 +1832,10 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Connected cards in M3 Expressive style: 3 connected cards
             // 1. Public Key block (clickable to copy, shortened with ellipsis)
             Surface(
-                shape = getM3EConnectedShape(0, 2, cornerRadius = 18.dp, innerRadius = 4.dp),
+                shape = getM3EConnectedShape(0, 3, cornerRadius = 18.dp, innerRadius = 4.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1880,14 +1883,50 @@ fun ProfileScreen(
                 }
             }
 
-            // 2. Settings & Security block (opens Settings sheet)
+            // 2. Bio / О себе card (always visible, clickable to edit)
             Surface(
-                shape = getM3EConnectedShape(1, 2, cornerRadius = 18.dp, innerRadius = 4.dp),
+                shape = getM3EConnectedShape(1, 3, cornerRadius = 18.dp, innerRadius = 4.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 1.5.dp)
-                    .clickable { showSettingsSheet = true }
+                    .clickable { onEditClick() }
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "О себе (Bio)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Изменить",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (about.isNotBlank()) about else "Не указано • Нажмите, чтобы рассказать о себе",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (about.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // 3. Settings entry card (opens separate Settings screen)
+            Surface(
+                shape = getM3EConnectedShape(2, 3, cornerRadius = 18.dp, innerRadius = 4.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 1.5.dp)
+                    .clickable { onSettingsClick() }
             ) {
                 Row(
                     modifier = Modifier
@@ -1925,81 +1964,169 @@ fun ProfileScreen(
             }
         }
     }
+}
 
-    // Settings & Security Modal Bottom Sheet (contains Secret Key & Logout)
-    ExpressiveModalBottomSheet(
-        visible = showSettingsSheet,
-        onDismissRequest = { showSettingsSheet = false }
-    ) {
-        Box(
-            modifier = Modifier
-                .width(36.dp)
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(
+    repository: MessengerRepository,
+    npub: String,
+    nsec: String,
+    onBack: () -> Unit,
+    onLogout: () -> Unit
+) {
+    val clipboardManager = LocalClipboardManager.current
+    var npubCopied by remember { mutableStateOf(false) }
+    var nsecCopied by remember { mutableStateOf(false) }
+    var showNsec by remember { mutableStateOf(false) }
+    var showLogoutSafetySheet by remember { mutableStateOf(false) }
 
-        Text(
-            text = stringResource(Res.string.profile_settings_btn),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.fillMaxWidth()
-        )
+    val shortenedNpub = remember(npub) {
+        if (npub.length > 20) "${npub.take(12)}...${npub.takeLast(8)}" else npub
+    }
 
-        Spacer(modifier = Modifier.height(16.dp))
+    LaunchedEffect(npubCopied) {
+        if (npubCopied) {
+            delay(2000L)
+            npubCopied = false
+        }
+    }
+    LaunchedEffect(nsecCopied) {
+        if (nsecCopied) {
+            delay(2000L)
+            nsecCopied = false
+        }
+    }
 
-        // Secret Key block (protected with Show/Hide toggle and copy)
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
                     Text(
-                        text = stringResource(Res.string.profile_secret_key),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Bold
+                        text = "Настройки",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (nsecCopied) {
-                            Text(
-                                text = stringResource(Res.string.profile_copied),
-                                color = MaterialTheme.colorScheme.primary,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                        }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        ArrowBackIcon(tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            // Section 1: Ключи и безопасность
+            Text(
+                text = "Ключи и безопасность",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+            )
+
+            // Public Key card
+            Surface(
+                shape = getM3EConnectedShape(0, 2, cornerRadius = 18.dp, innerRadius = 4.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 1.5.dp)
+                    .clickable {
+                        clipboardManager.setText(AnnotatedString(npub))
+                        npubCopied = true
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (showNsec) stringResource(Res.string.profile_hide_key) else stringResource(Res.string.profile_show_key),
+                            text = "Публичный ключ (npub)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = shortenedNpub,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    if (npubCopied) {
+                        Text(
+                            text = "✓ Скопировано",
                             color = MaterialTheme.colorScheme.primary,
                             style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .clickable { showNsec = !showNsec }
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = if (showNsec) "${nsec.take(12)}...${nsec.takeLast(8)}" else "••••••••••••••••••••",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                if (showNsec) {
+            }
+
+            // Secret Key card
+            Surface(
+                shape = getM3EConnectedShape(1, 2, cornerRadius = 18.dp, innerRadius = 4.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Секретный ключ (nsec)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (nsecCopied) {
+                                Text(
+                                    text = "✓ Скопировано",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(end = 8.dp)
+                                )
+                            }
+                            Text(
+                                text = if (showNsec) "Скрыть" else "Показать",
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clickable { showNsec = !showNsec }
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (showNsec) "${nsec.take(12)}...${nsec.takeLast(8)}" else "••••••••••••••••••••",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Нажмите, чтобы скопировать nsec",
+                        text = "Нажмите для копирования nsec",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.clickable {
@@ -2009,36 +2136,103 @@ fun ProfileScreen(
                     )
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-        // Logout inside Settings
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                    showSettingsSheet = false
-                    showLogoutSafetySheet = true
+            // Section 2: Сеть Nostr
+            Text(
+                text = "Сеть Nostr",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+            )
+
+            val relays = listOf("wss://relay.damus.io", "wss://relay.primal.net", "wss://nos.lol")
+            relays.forEachIndexed { idx, relayUrl ->
+                Surface(
+                    shape = getM3EConnectedShape(idx, relays.size, cornerRadius = 18.dp, innerRadius = 4.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF4CAF50))
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = relayUrl,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = stringResource(Res.string.profile_logout_link),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.error
-                )
             }
-        }
 
-        Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Section 3: О приложении
+            Text(
+                text = "О приложении",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+            )
+
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Noss Messenger v1.0.0",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Децентрализованный E2EE мессенджер на протоколе Nostr с шифрованием NIP-04/NIP-44.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Section 4: Выход из аккаунта
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showLogoutSafetySheet = true }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Выйти из аккаунта",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(40.dp))
+        }
     }
 
     // Safety Confirmation Bottom Sheet for Logout
