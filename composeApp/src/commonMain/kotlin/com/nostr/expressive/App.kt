@@ -1807,7 +1807,7 @@ fun ProfileScreen(
                 color = MaterialTheme.colorScheme.primary
             )
 
-            // Bio directly below handle if present
+            // Bio directly below handle (shown once)
             if (about.isNotBlank()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
@@ -1815,7 +1815,7 @@ fun ProfileScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier.padding(horizontal = 20.dp)
                 )
             }
 
@@ -1832,14 +1832,12 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Connected cards in M3 Expressive style: 3 connected cards
-            // 1. Public Key block (clickable to copy, shortened with ellipsis)
+            // Public Key block (clickable to copy, shortened with ellipsis)
             Surface(
-                shape = getM3EConnectedShape(0, 3, cornerRadius = 18.dp, innerRadius = 4.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 1.5.dp)
                     .clickable {
                         clipboardManager.setText(AnnotatedString(npub))
                         copied = true
@@ -1879,86 +1877,6 @@ fun ProfileScreen(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
-                    }
-                }
-            }
-
-            // 2. Bio / О себе card (always visible, clickable to edit)
-            Surface(
-                shape = getM3EConnectedShape(1, 3, cornerRadius = 18.dp, innerRadius = 4.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 1.5.dp)
-                    .clickable { onEditClick() }
-            ) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "О себе (Bio)",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Изменить",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (about.isNotBlank()) about else "Не указано • Нажмите, чтобы рассказать о себе",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (about.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // 3. Settings entry card (opens separate Settings screen)
-            Surface(
-                shape = getM3EConnectedShape(2, 3, cornerRadius = 18.dp, innerRadius = 4.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 1.5.dp)
-                    .clickable { onSettingsClick() }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        SettingsGearIcon(
-                            size = 20.dp,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(Res.string.profile_settings_btn),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = stringResource(Res.string.profile_settings_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }
